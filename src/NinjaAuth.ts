@@ -31,7 +31,7 @@ class NinjaAuthClient {
 
     public init(config: NinjaAuthConfig): void {
 
-        const supportedPlatforms = this.config?.platform ? this.config.platform : "web";
+        const supportedPlatforms = config?.platform ?? "web";
 
         if (!config.clientId) {
             throw new Error(
@@ -67,9 +67,8 @@ class NinjaAuthClient {
         const state = generateState();
         switch (this.config!.platform) {
             case "extension":
-                this.createAuthFlow(new ChromeOAuthTransactionStorage, new ChromeAuthorizationLauncher, verifier, challenge, state);
+                return this.createAuthFlow(new ChromeOAuthTransactionStorage, new ChromeAuthorizationLauncher, verifier, challenge, state);
 
-                break;
             case "web":
                 // Handle web-specific authentication flow
                 break;
@@ -80,7 +79,15 @@ class NinjaAuthClient {
         return new Promise<NinjaUser>((resolve, reject) => { })
     }
 
-    private async createAuthFlow(storage: OAuthTransactionStorage, authorize: AuthorizationLauncher, verifier: string, challenge: string, state: string) {
+
+    private ensureInitialized(): boolean {
+        if (!this.config) {
+            return false;
+        }
+        return true;
+    }
+
+    private async createAuthFlow(storage: OAuthTransactionStorage, authorize: AuthorizationLauncher, verifier: string, challenge: string, state: string): Promise<NinjaUser> {
         const authorizationUrl = buildAuthorizationUrl({
             clientId: this.config!.clientId,
             redirectUri: this.config!.redirectUri,
@@ -104,8 +111,14 @@ class NinjaAuthClient {
             );
 
         }
-        const user = await this.exchangeCodeForToken(callback.code, returnedTransaction.verifier);
-        await storage.remove(callback.state);
+        try {
+            const user = await this.exchangeCodeForToken(callback.code, returnedTransaction.verifier);
+            await storage.remove(callback.state);
+            return user;
+        } finally {
+
+            await storage.remove(callback.state);
+        }
     }
 
     private async exchangeCodeForToken(
