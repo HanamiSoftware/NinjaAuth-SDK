@@ -361,3 +361,12 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/index.html
+/test/index.html
+/test/dist/index.cjs
+/test/dist/index.d.cts
+/test/dist/index.d.ts
+/test/dist/index.js
+/test/dist/index.global.js
+/test/dist/index.js.map
+/test/dist/index.cjs.map
