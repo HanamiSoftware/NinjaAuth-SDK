@@ -1,6 +1,6 @@
 export const NINJA_CONNECT = {
     AUTHORIZATION_ENDPOINT:
-        "https://auth.ninjaconnect.io/oauth2/authorize",
+        "https://auth.ninjaconnect.io",
 
     EXCHANGE_ENDPOINT:
         "https://auth.ninjaconnect.io/v1/exchange",

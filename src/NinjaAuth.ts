@@ -20,7 +20,7 @@ import { ChromeAuthorizationLauncher } from "./platform/chrome/AuthorizationLaun
 
 
 const VERSION = "0.1.0";
-
+const BASE_URL = "http://127.0.0.1:8787/v1";
 
 class NinjaAuthClient {
 
@@ -43,9 +43,6 @@ class NinjaAuthClient {
             throw new Error(
                 "NinjaAuth: redirectUri is required."
             );
-        }
-        if (!config.platform) {
-            config.platform = "web";
         }
 
         this.config = {
@@ -93,7 +90,8 @@ class NinjaAuthClient {
             redirectUri: this.config!.redirectUri,
             codeChallenge: challenge,
             state: state,
-            scope: "openid profile email offline_access"
+            scope: "openid profile email offline_access user.read",
+            resource: "https://api.ninjaurl.io/v1"
         });
         const transaction = {
             verifier: verifier,
@@ -113,7 +111,6 @@ class NinjaAuthClient {
         }
         try {
             const user = await this.exchangeCodeForToken(callback.code, returnedTransaction.verifier);
-            await storage.remove(callback.state);
             return user;
         } finally {
 
@@ -127,7 +124,7 @@ class NinjaAuthClient {
     ): Promise<NinjaUser> {
 
         const response = await fetch(
-            "https://auth.ninjaconnect.io/v1/exchange",
+            `${BASE_URL}/exchange`,
             {
                 method: "POST",
                 headers: {
@@ -169,12 +166,31 @@ class NinjaAuthClient {
 
     public async getSession(): Promise<NinjaSession> {
 
-        // TODO
-
+    if (!this.ensureInitialized()) {
         throw new Error(
-            "NinjaAuth: getSession() is not implemented yet."
+            "NinjaAuth: call init() before getSession()."
         );
     }
+
+    const response = await fetch(
+        `${BASE_URL}/session`,
+        {
+            method: "GET",
+            credentials: "include"
+        }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+        throw new Error(
+            result.message ||
+            "NinjaAuth: failed to retrieve session."
+        );
+    }
+
+    return result.data as NinjaSession;
+}
 }
 
 

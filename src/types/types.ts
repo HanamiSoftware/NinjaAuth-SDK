@@ -22,6 +22,38 @@ export interface NinjaSession {
     session: NinjaSessionInfo | null;
 }
 
+export interface NinjaSharedIdentity {
+    id: string;
+    email: string | null;
+    name: string | null;
+    pictureUrl: string | null;
+}
+
+export interface NinjaSharedSession {
+    authenticated: boolean;
+    identity: NinjaSharedIdentity | null;
+    session: NinjaSessionInfo | null;
+}
+
+export interface NinjaAppAdapter<TProfile> {
+    readonly applicationId: string;
+
+    enrich(
+        identity: NinjaSharedIdentity,
+        assertion: string
+    ): Promise<TProfile>;
+}
+
+export interface NinjaAppContext<TProfile> {
+    identity: NinjaSharedIdentity;
+    application: {
+        id: string;
+        profile: TProfile;
+    };
+    session: NinjaSessionInfo;
+}
+
+
 export interface OAuthTransaction {
     verifier: string;
     redirectUri: string;

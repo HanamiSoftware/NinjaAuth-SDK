@@ -8,6 +8,7 @@ export interface AuthorizationRequest {
     state: string;
     codeChallenge: string;
     scope: string;
+    resource: string;
 }
 
 export interface AuthorizationCallback {
@@ -27,6 +28,7 @@ export function buildAuthorizationUrl(
     url.searchParams.set("client_id", request.clientId);
     url.searchParams.set("redirect_uri", request.redirectUri);
     url.searchParams.set("scope", request.scope);
+    url.searchParams.set("resource", request.resource);
     url.searchParams.set(
         "code_challenge",
         request.codeChallenge
