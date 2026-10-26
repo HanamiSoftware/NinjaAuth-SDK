@@ -1,4 +1,4 @@
-# NinjaAuth — Core Checkpoint 0.1
+# NinjaAuth - Core Checkpoint 0.1
 
 ## 1. Obiettivo del progetto
 
@@ -427,7 +427,7 @@ NinjaAuth non deve conoscere direttamente la configurazione dei provider.
 
 ---
 
-# 14. Provider selection — FUTURE FEATURE
+# 14. Provider selection - FUTURE FEATURE
 
 È stata discussa la possibilità di avere un endpoint futuro come:
 
