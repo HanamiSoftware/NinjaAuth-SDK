@@ -1,785 +1,132 @@
-# NinjaAuth - Core Checkpoint 0.1
+# NinjaAuth — Core Checkpoint 0.1
 
-## 1. Obiettivo del progetto
+> **Aggiornato:** 30 ottobre 2026  
+> Per lo stato operativo completo e le priorità consultare la [roadmap](ROADMAP.md). Questo checkpoint raccoglie le decisioni architetturali e la Definition of Done del Core.
 
-NinjaAuth è l'SDK di autenticazione dell'ecosistema Ninja.
+## 1. Obiettivo
 
-Il suo scopo è nascondere allo sviluppatore la complessità di OAuth 2.0, PKCE, state, sessioni e refresh, offrendo un'API semplice e coerente.
+NinjaAuth è l'SDK TypeScript che permette a un'applicazione di utilizzare Ninja Connect per autenticazione, identità condivisa e sessione.
 
 Principio guida:
 
-> **NinjaAuth gestisce la complessità dell'autenticazione. La tua applicazione è responsabile dell'esperienza utente e dei dati dell'applicazione.**
+> **NinjaAuth gestisce la complessità dell'autenticazione. L'applicazione rimane responsabile dei propri dati e delle proprie autorizzazioni.**
 
-L'applicazione che utilizza NinjaAuth rimane proprietaria dei propri dati applicativi e decide autonomamente come persistire il profilo utente.
+NinjaAuth deve poter essere utilizzato dai prodotti dell'ecosistema Ninja e da sviluppatori/applicazioni esterne all'ecosistema.
 
----
+## 2. Confini architetturali
 
-## 2. Ecosistema
+### Ninja Connect
 
-```text
-                    ┌─────────────────────┐
-                    │    Ninja Connect    │
-                    │ Identity / Sessions │
-                    └──────────┬──────────┘
-                               │
-                         OAuth / Session
-                               │
-                    ┌──────────▼──────────┐
-                    │      NinjaAuth      │
-                    │        SDK          │
-                    └──────────┬──────────┘
-                               │
-              ┌────────────────┴────────────────┐
-              │                                 │
-      ┌───────▼────────┐                ┌───────▼────────┐
-      │ Web Application│                │BrowserExtension│
-      └────────────────┘                └────────────────┘
-              │                                 │
-              └────────── Application Data ─────┘
-```
+Ninja Connect è l'Identity Broker centrale e gestisce autenticazione tramite identity provider, identità Ninja Connect condivisa e sessione centrale.
 
-Ninja Connect utilizza Authgear come componente sottostante di identity management.
+Non gestisce il modello di autorizzazione specifico di ogni prodotto.
 
-L'applicazione non deve avere accesso diretto ad Authgear né ai suoi secret.
+### NinjaAuth SDK
 
----
+Il client SDK orchestra PKCE, OAuth state, launcher e transaction storage specifici della piattaforma, callback, code exchange e API pubblica per login, sessione e logout.
 
-# 3. API pubblica del Core
+Non deve accedere a database, chiavi di cifratura o session secret grezzi.
 
-L'API pubblica prevista per il primo Core è volutamente piccola:
+### Applicazioni
 
-```ts
-NinjaAuth.init(...)
-NinjaAuth.login()
-NinjaAuth.getSession()
-NinjaAuth.logout()
-```
+Ogni applicazione gestisce autonomamente profilo applicativo, ruoli, permessi, capabilities, dati e regole di business.
 
-### `init()`
+NinjaURL non deve conoscere NinjaReviews e viceversa.
 
-Inizializza NinjaAuth.
+### NinjaAppAdapter<TProfile>
 
-Configurazione attuale:
+L'adapter applicativo è il confine opzionale che permette ai prodotti first-party di associare un profilo tipizzato all'identità condivisa senza contaminare NinjaUser.
 
-```ts
-interface NinjaAuthConfig {
-    clientId: string;
-    redirectUri: string;
-    platform?: "web" | "extension";
-}
-```
+Non è un OAuth/platform adapter. Non centralizza RBAC in Ninja Connect e non è necessario per l'uso standalone.
 
-`platform` deve avere default `web`.
+**Stato:** decisione architetturale definita; non dichiarare il tipo come API pubblica disponibile finché non sarà implementato ed esportato.
 
-Il Core non deve contenere logica specifica di Chrome o di una particolare piattaforma.
+## 3. API pubblica prevista
 
----
+Il Core espone concettualmente:
 
-# 4. `login()`
-
-Contratto desiderato:
-
-```ts
-const user = await NinjaAuth.login();
-
-console.log(user.email);
-console.log(user.name);
-```
-
-`login()` significa:
-
-> **Autentica l'utente.**
-
-Non deve richiedere allo sviluppatore di conoscere:
-
-* OAuth authorization code flow
-* PKCE
-* state
-* authorization URL
-* token exchange
-* session cookie
-* refresh token
-
-Il risultato del login è direttamente un:
-
-```ts
-NinjaUser
-```
-
-Struttura attuale:
-
-```ts
-interface NinjaUser {
-    id: string;
-    email?: string;
-    name?: string;
-    picture?: string;
-}
-```
-
----
-
-## 5. `getSession()`
-
-`getSession()` permette all'applicazione di verificare lo **stato corrente dell'autenticazione** senza avviare un nuovo login.
-
-È utile, ad esempio, quando un'applicazione deve decidere cosa mostrare all'utente all'avvio:
-
-```ts
-const session = await NinjaAuth.getSession();
-
-if (session.authenticated) {
-    // Sessione attiva e valida
-    showProtectedPage();
-} else {
-    // Nessuna sessione valida
-    redirectToLogin();
-}
-```
-
-Il metodo quindi non significa "fai il login", ma:
-
-> **Dimmi se esiste una sessione di autenticazione valida per questo utente.**
-
-Questo permette all'applicazione di gestire normalmente i propri flussi di navigazione:
-
-```text
-Application starts
-       │
-       ▼
-getSession()
-       │
-       ├── authenticated: true
-       │       │
-       │       ▼
-       │   Protected area
-       │
-       └── authenticated: false
-               │
-               ▼
-             Login
-```
-
-`getSession()` non deve aprire popup, avviare OAuth o richiedere all'utente di autenticarsi nuovamente.
-
-È particolarmente utile per:
-
-* proteggere pagine o route;
-* ripristinare lo stato di autenticazione dopo il caricamento dell'applicazione;
-* verificare se una sessione esistente è ancora valida;
-* decidere se mostrare l'area autenticata oppure il flusso di login.
-
-Per il normale login dell'utente si utilizza invece:
-
-```ts
-const user = await NinjaAuth.login();
-```
-
-La distinzione fondamentale è quindi:
-
-```text
-login()      → Autentica l'utente
-getSession() → Verifica lo stato di autenticazione corrente
-logout()     → Termina la sessione
-```
-
-
-# 6. `logout()`
-
-Contratto:
-
-```ts
-await NinjaAuth.logout();
-```
-
-Deve terminare la sessione attraverso Ninja Connect e ripulire lo stato client necessario.
-
-Implementazione ancora da completare.
-
----
-
-# 7. Architettura Core
-
-Il Core deve essere platform-agnostic.
-
-```text
-NinjaAuth Core
-│
-├── OAuth
-│   ├── Authorization URL
-│   ├── PKCE
-│   ├── State
-│   └── Callback parsing
-│
-├── Session
-│
-├── User
-│
-└── Platform abstractions
-    │
-    ├── Web
-    │   ├── AuthorizationLauncher
-    │   └── TransactionStorage
-    │
-    └── Extension
-        ├── AuthorizationLauncher
-        └── TransactionStorage
-```
-
-Le implementazioni concrete vengono fornite dagli adapter di piattaforma.
-
-Il Core non deve conoscere:
-
-```ts
-chrome.identity
-window.open
-document
-localStorage
-```
-
-se non attraverso le rispettive astrazioni.
-
----
-
-# 8. OAuth transaction
-
-Il flusso utilizza:
-
-1. PKCE verifier
-2. PKCE challenge
-3. state
-4. redirect URI
-5. transaction storage
-
-Schema concettuale:
-
-```text
-login()
-   │
-   ├── generatePKCE()
-   ├── generateState()
-   │
-   ├── save transaction
-   │
-   ├── buildAuthorizationUrl()
-   │
-   ├── AuthorizationLauncher
-   │
-   ├── receive callback
-   │
-   ├── parseAuthorizationCallback()
-   │
-   ├── retrieve transaction by state
-   │
-   ├── exchange authorization code
-   │
-   └── return NinjaUser
-```
-
-La transaction contiene attualmente:
-
-```ts
-{
-    verifier: string;
-    redirectUri: string;
-    createdAt: number;
-}
-```
-
----
-
-# 9. State
-
-Implementazione attuale concettualmente:
-
-```ts
-export function generateState(length: number = 32): string {
-    return Array.from(
-        crypto.getRandomValues(new Uint8Array(length))
-    )
-        .map(b => b.toString(16).padStart(2, "0"))
-        .join("");
-}
-```
-
-`generateState()` è sincrona.
-
-Non deve diventare `async` perché:
-
-```ts
-crypto.getRandomValues()
-```
-
-è sincrona.
-
----
-
-# 10. PKCE
-
-PKCE è asincrono perché il challenge utilizza:
-
-```ts
-crypto.subtle.digest()
-```
-
-Implementazione attuale:
-
-```ts
-export async function generatePKCE(): Promise<PKCEPair> {
-    const array = new Uint8Array(32);
-
-    crypto.getRandomValues(array);
-
-    const verifier = base64UrlEncode(array);
-
-    const digest = await crypto.subtle.digest(
-        "SHA-256",
-        new TextEncoder().encode(verifier)
-    );
-
-    const challenge = base64UrlEncode(
-        new Uint8Array(digest)
-    );
-
-    return {
-        verifier,
-        challenge
-    };
-}
-```
-
----
-
-# 11. Extension flow
-
-Per browser extension il launcher concreto utilizza:
-
-```ts
-chrome.identity.launchWebAuthFlow()
-```
-
-Questa è una responsabilità dell'adapter Chrome.
-
-Il Core non deve contenere direttamente chiamate a `chrome.identity`.
-
----
-
-# 12. Web flow
-
-Il Web adapter dovrà utilizzare una normale popup browser.
-
-Concettualmente:
-
-```text
-Web Application
-      │
-      │ window.open()
-      ▼
-Ninja Connect
-      │
-      │ OAuth
-      ▼
-Provider / Authgear
-      │
-      ▼
-Ninja Connect callback
-      │
-      ▼
-Registered application redirect URI
-      │
-      ▼
-Popup callback
-      │
-      ▼
-NinjaAuth
-```
-
-Non è previsto l'utilizzo di iframe nascosti.
-
----
-
-# 13. Ninja Connect / Authgear
-
-Ninja Connect rappresenta il layer pubblico di identity dell'ecosistema.
-
-Authgear rimane un componente interno.
-
-L'utente può autenticarsi tramite i provider configurati in Ninja Connect.
-
-In futuro Ninja Connect potrà decidere quali provider sono disponibili per una determinata Client App / piano.
-
-Il modello previsto è:
-
-```text
-Application
-     │
-     │ Sign in with Ninja Connect
-     ▼
-Ninja Connect
-     │
-     ├── Google
-     ├── Apple
-     ├── GitHub
-     └── altri provider
-```
-
-NinjaAuth non deve conoscere direttamente la configurazione dei provider.
-
----
-
-# 14. Provider selection - FUTURE FEATURE
-
-È stata discussa la possibilità di avere un endpoint futuro come:
-
-```text
-/v1/auth/providers
-```
-
-che restituisca i provider disponibili per la Client App.
-
-La UI Ninja Connect potrà quindi mostrare dinamicamente i pulsanti.
-
-Esempio concettuale:
-
-```text
-FREE
- └── Google
-
-PRO
- ├── Google
- ├── Apple
- └── GitHub
-
-BUSINESS
- └── provider aggiuntivi
-```
-
-Non fa parte del Core 0.1.
-
----
-
-# 15. `x_oauth_provider_alias`
-
-Authgear supporta il parametro documentato:
-
-```text
-x_oauth_provider_alias
-```
-
-per indirizzare direttamente il flusso verso uno specifico provider configurato.
-
-Questo deve essere utilizzato attraverso l'API documentata di Authgear, non attraverso elementi DOM interni della sua UI.
-
-Anche questa è una feature di Ninja Connect, non una responsabilità del Core NinjaAuth.
-
----
-
-# 16. Session architecture
-
-Ninja Connect gestisce la sessione applicativa.
-
-Dopo il token exchange viene creata una sessione Ninja.
-
-Concettualmente:
-
-```text
-OAuth code
-    │
-    ▼
-Ninja Connect
-    │
-    ├── Authgear token exchange
-    │
-    ├── resolve user
-    │
-    ├── generate session secret
-    │
-    ├── hash session secret
-    │
-    ├── encrypt refresh token
-    │
-    └── create auth session
-             │
-             ▼
-       ninja_session cookie
-```
-
-La cookie è prevista come:
-
-```text
-HttpOnly
-Secure
-SameSite=Strict
-Path=/
-```
-
-La sessione possiede una normale expiration e una absolute expiration.
-
-Il refresh viene effettuato da Ninja Connect quando necessario.
-
----
-
-# 17. Endpoint Ninja Connect coinvolti
-
-Attualmente il Core dialoga principalmente con:
-
-```text
-POST /v1/exchange
-GET  /v1/session
-GET  /v1/user/me
-```
-
-### `/v1/exchange`
-
-Riceve:
-
-```text
-grant_type
-code
-redirect_uri
-client_id
-code_verifier
-```
-
-ed esegue il token exchange.
-
-### `/v1/session`
-
-Restituisce lo stato della sessione.
-
-Concettualmente:
-
-```json
-{
-    "success": true,
-    "data": {
-        "authenticated": true,
-        "user": {},
-        "session": {
-            "expiresAt": "...",
-            "absoluteExpiresAt": "..."
-        }
-    }
-}
-```
-
-oppure:
-
-```json
-{
-    "success": true,
-    "data": {
-        "authenticated": false,
-        "user": null,
-        "session": null
-    }
-}
-```
-
-### `/v1/user/me`
-
-Restituisce l'utente autenticato.
-
----
-
-# 18. Punto da risolvere prima del test end-to-end
-
-Esiste una discrepanza attuale tra SDK e `/v1/exchange`.
-
-Lo SDK si aspetta:
-
-```ts
-return result.data.user as NinjaUser;
-```
-
-ma l'implementazione corrente di `/v1/exchange` non restituisce ancora necessariamente `data.user`.
-
-Questo va risolto prima di considerare `login()` completato.
-
-La decisione architetturale preferita è mantenere il contratto semplice:
-
-```text
-login()
-   ↓
-exchange
-   ↓
-Ninja Connect
-   ↓
-NinjaUser
-```
-
-così il chiamante riceve direttamente:
-
-```ts
-const user = await NinjaAuth.login();
-```
-
-senza dover effettuare una seconda richiesta a `/v1/user/me`.
-
----
-
-# 19. Cleanup transaction
-
-Il transaction state deve essere rimosso sia in caso di successo sia in caso di errore.
-
-Pattern previsto:
-
-```ts
-try {
-    const user = await this.exchangeCodeForToken(
-        callback.code,
-        returnedTransaction.verifier
-    );
-
-    return user;
-} finally {
-    await storage.remove(callback.state);
-}
-```
-
-`finally` viene utilizzato esclusivamente per garantire il cleanup.
-
-Gli errori devono continuare a propagarsi normalmente.
-
-Non è necessario introdurre un `catch` se non c'è una specifica logica di error handling da eseguire.
-
-
-# 20. Stato attuale del Core
-
-### Completato / da completare
-
-* [x] struttura Core
-* [x] `init()`
-* [x] `NinjaUser`
-* [x] PKCE
-* [x] state generation
-* [x] authorization URL
-* [x] callback parsing
-* [x] transaction abstraction
-* [x] Chrome transaction storage
-* [x] Chrome authorization launcher
-* [x] Chrome OAuth flow
-* [x] code exchange
-* [ ] verificare contratto definitivo `/v1/exchange` → `NinjaUser`
-
-### Da completare nel Core
-
-* [ ] Web AuthorizationLauncher
-* [ ] Web TransactionStorage
-* [ ] Web login flow
-* [ ] `getSession()`
-* [ ] `logout()`
-* [ ] error model definitivo
-* [ ] test end-to-end extension
-* [ ] test end-to-end web
-* [ ] cleanup e refactoring finale
-* [ ] definizione release `0.1.0`
-
----
-
-# 21. Cosa NON entra nel Core 0.1
-
-Per evitare feature creep:
-
-* provider management
-* account linking
-* device management
-* MFA
-* passkeys
-* analytics
-* application profile management
-* database application-side
-* notifiche
-* piani FREE/PRO/BUSINESS
-* gestione avanzata delle capabilities
-
-Queste potranno essere costruite successivamente.
-
----
-
-# 22. Filosofia del progetto
-
-NinjaAuth deve seguire il principio:
-
-> **Simple by default, powerful when needed.**
-
-Per il 90% degli sviluppatori:
-
-```ts
-NinjaAuth.init({
-    clientId: "...",
-    redirectUri: "..."
-});
-
-const user = await NinjaAuth.login();
-```
-
-Per chi necessita di maggiore controllo:
-
-```ts
-const session = await NinjaAuth.getSession();
-```
-
-La complessità rimane sotto il cofano.
-
----
-
-# 23. Definition of Done
-
-Il Core NinjaAuth 0.1 sarà considerato chiuso quando sarà possibile fare realmente:
-
-```ts
+~~~ts
 NinjaAuth.init(config);
-
 const user = await NinjaAuth.login();
-
 const session = await NinjaAuth.getSession();
-
 await NinjaAuth.logout();
-```
+~~~
 
-su:
+La firma e i tipi definitivi devono essere verificati sulla reale implementazione prima del rilascio.
 
-```text
-Browser Extension
-Web Application
-```
+## 4. Sessione centrale
 
-con:
+Dopo il token exchange, Ninja Connect risolve l'identità, genera un session secret casuale, memorizza nel database solo l'hash del secret, conserva il refresh token upstream cifrato e imposta il cookie ninja_session.
 
-* OAuth funzionante
-* PKCE funzionante
-* state verificato
-* transaction storage funzionante
-* sessione Ninja Connect funzionante
-* refresh gestito da Ninja Connect
-* error handling coerente
-* nessuna dipendenza platform-specific nel Core
-* nessun accesso dell'applicazione ad Authgear secret
-* nessuna responsabilità del Core sulla persistenza dei dati applicativi
+Il cookie è HttpOnly e deve restare opaco al codice JavaScript dell'SDK. La sessione ha una scadenza ordinaria e una scadenza assoluta. Il refresh non deve estendere la scadenza assoluta e non deve riattivare una sessione revocata.
 
-**Solo a questo punto il Core viene considerato stabile e si passa alle feature.**
+## 5. Concorrenza — verifiche completate
 
----
+Due scenari critici del Worker hanno superato test d'integrazione PostgreSQL:
 
-# 25. Prossimo passo
+| Test | Invariante | Esito |
+|---|---|---|
+| RT-001 | Un refresh concorrente obsoleto che riceve invalid_grant non deve revocare la sessione già aggiornata da un'altra richiesta | PASS |
+| RT-002 | Un logout completato mentre refresh è in volo deve prevalere; il refresh non deve riattivare la sessione locale | PASS |
 
-Ordine di lavoro concordato:
+I test sono stati eseguiti sul branch test/auth-refresh-concurrency-rt001 del repository NinjaURL, con PostgreSQL/Neon reale e risposte HTTP dell'identity provider simulate.
 
-```text
-1. Fix init()
-2. Fix transaction cleanup
-3. Allineare /v1/exchange con NinjaUser
-4. Chiudere Extension login end-to-end
-5. Implementare Web adapter
-6. Implementare Web login
-7. Implementare getSession()
-8. Implementare logout()
-9. Test completo
-10. Refactoring finale
-11. Freeze Core 0.1
-12. Documentazione
-13. Feature layer
-```
+- [CI RT-001](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41073531083)
+- [CI RT-002](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41078846722)
 
-**Checkpoint:** NinjaAuth Core prima delle feature.
+Questi risultati dimostrano gli specifici scenari orchestrati, non tutte le possibili interleaving. I test non sono un E2E live con Authgear. Le modifiche non risultano mergeate né deployate.
+
+Restano da analizzare:
+- logout tra il completamento del refresh e il ritorno finale di resolveSession();
+- refresh upstream che restituisce un nuovo token dopo che il logout ha già tentato la revoca del token precedente;
+- ulteriori ordinamenti, timeout e failure path prioritizzati in base al rischio.
+
+## 6. Stato SDK attuale
+
+Il codice SDK sul branch principale non è ancora allineato al contratto Worker:
+
+- il client usa ancora un endpoint localhost hardcoded;
+- il code exchange invia form-urlencoded mentre il Worker si aspetta JSON;
+- il client non invia state e il formato generato non corrisponde all'UUID richiesto;
+- il confronto esplicito del callback state è da completare;
+- logout è ancora un TODO;
+- il flusso Web non è implementato;
+- il package non ha ancora una suite test SDK.
+
+Questi punti sono ancora aperti: il superamento dei test RT-001/RT-002 riguarda il backend Worker e non li chiude automaticamente.
+
+## 7. Principi da non violare
+
+- Identità condivisa e autorizzazione applicativa restano separate.
+- Nessun ruolo o permesso prodotto viene centralizzato in Ninja Connect.
+- Il client non legge il cookie HttpOnly né conserva session secret grezzi.
+- Un JWT decodificato senza verifica non è una credenziale attendibile.
+- Il refresh non può annullare una revoca.
+- I test devono documentare chiaramente cosa è reale e cosa è simulato.
+- Nessun merge, deploy o trasferimento del Worker senza approvazione esplicita.
+
+## 8. Definition of Done — Core 0.1
+
+- [ ] init() valida la configurazione e usa endpoint espliciti per ambiente.
+- [ ] login() completa OAuth Authorization Code + PKCE.
+- [ ] Il callback state è confrontato con la transazione originaria.
+- [ ] Il code exchange rispetta il contratto effettivo del Worker.
+- [ ] Il risultato è un NinjaUser normalizzato.
+- [ ] getSession() ripristina la sessione senza avviare login interattivo.
+- [ ] Il refresh è gestito server-side e rispetta revoca e absolute expiry.
+- [ ] logout() revoca la sessione centrale e gestisce il risultato della revoca upstream.
+- [ ] SDK e Worker hanno test automatici per i casi critici.
+- [ ] Documentazione, tipi pubblici e comportamento effettivo coincidono.
+
+Solo allora sarà possibile congelare e rilasciare NinjaAuth Core 0.1.
+
+## 9. Prossimo ordine di lavoro
+
+1. Allineare exchange e state tra SDK e Worker.
+2. Chiudere e testare Extension login end-to-end.
+3. Completare getSession() e logout() nell'SDK.
+4. Aggiungere test SDK e CI.
+5. Completare i test backend concorrenti residui prioritari.
+6. Stabilizzare API pubblica e error model.
+7. Implementare Web come milestone separata.
+8. Verificare la Definition of Done, aggiornare la documentazione e solo dopo preparare il freeze.
