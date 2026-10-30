@@ -643,34 +643,10 @@ Gli errori devono continuare a propagarsi normalmente.
 
 Non è necessario introdurre un `catch` se non c'è una specifica logica di error handling da eseguire.
 
----
 
-# 20. Bug noto in `init()`
+# 20. Stato attuale del Core
 
-La versione attuale contiene una logica da correggere.
-
-Non bisogna leggere la piattaforma dalla configurazione precedente:
-
-```ts
-const supportedPlatforms =
-    this.config?.platform
-        ? this.config.platform
-        : "web";
-```
-
-La configurazione deve essere derivata dal nuovo parametro:
-
-```ts
-const platform = config.platform ?? "web";
-```
-
-e poi salvata.
-
----
-
-# 21. Stato attuale del Core
-
-### Completato / quasi completato
+### Completato / da completare
 
 * [x] struttura Core
 * [x] `init()`
@@ -701,7 +677,7 @@ e poi salvata.
 
 ---
 
-# 22. Cosa NON entra nel Core 0.1
+# 21. Cosa NON entra nel Core 0.1
 
 Per evitare feature creep:
 
@@ -721,7 +697,7 @@ Queste potranno essere costruite successivamente.
 
 ---
 
-# 23. Filosofia del progetto
+# 22. Filosofia del progetto
 
 NinjaAuth deve seguire il principio:
 
@@ -748,7 +724,7 @@ La complessità rimane sotto il cofano.
 
 ---
 
-# 24. Definition of Done
+# 23. Definition of Done
 
 Il Core NinjaAuth 0.1 sarà considerato chiuso quando sarà possibile fare realmente:
 
