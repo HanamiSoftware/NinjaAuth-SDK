@@ -1,94 +1,175 @@
-# NinjaAuth SDK — Roadmap
+# NinjaAuth — Roadmap and implementation status
 
-This roadmap reflects the repository source inspected on 24 October 2026. Status labels describe the code currently visible in the repository, not work that may exist only in a local working tree.
+> **Last reviewed:** 30 October 2026  
+> This is the only authoritative roadmap for the NinjaAuth SDK and its integration with Ninja Connect. The repository-root ROADMAP.md has been retired; use this document.
 
-## Current snapshot
+## Executive status
 
-| Area | Status | Evidence / note |
+NinjaAuth Core 0.1 is **not release-ready**. The central architecture is defined, and two important Auth Worker concurrency scenarios have passed PostgreSQL integration tests. However, the inspected SDK source still has an incomplete extension exchange contract, a local development endpoint, an unfinished Web platform, a placeholder logout method, and no SDK test suite in its package scripts.
+
+The backend test results below are branch-only evidence. They have not been merged or deployed.
+
+## Architecture decisions — agreed
+
+- Ninja Connect is the central Identity Broker for shared authentication, identity, and session lifecycle.
+- NinjaAuth is a client SDK and can be used by first-party Ninja products and independent third-party developers.
+- Ninja Connect owns shared identity and central session management; it does not own each application's business authorization.
+- Each consuming product owns its own profile, roles, permissions, capabilities, and application data.
+- The optional NinjaAppAdapter<TProfile> is an anti-contamination boundary for first-party product profiles. It is not an OAuth provider/platform adapter and is not required for standalone SDK use.
+- Product-specific RBAC must not be moved into Ninja Connect.
+- The experimental /v1/state endpoint is not a required part of the SDK flow and may be removed. Do not make the SDK depend on it without an explicit architecture decision.
+- No Worker repository transfer, merge, or deployment is included in the completed test work.
+
+## Completed and verified work
+
+### Auth Worker reliability — RT-001 and RT-002
+
+**PASS — focused integration tests**
+
+| Test | Invariant | Result |
 |---|---|---|
-| TypeScript package/build setup | 🟡 Present, needs release hardening | tsup builds ESM, CJS, types, and an IIFE bundle; no stable release workflow is documented. |
-| SDK initialization | 🟡 Basic implementation | `init()` stores client ID, redirect URI, and platform. Runtime validation and endpoint configuration need tightening. |
-| PKCE S256 utilities | 🟢 Implemented | Verifier/challenge are generated with Web Crypto. Add tests. |
-| OAuth state generation | 🟡 Implemented, contract mismatch | SDK currently generates hex state; worker's state schema expects a UUID. |
-| Chrome authorization launcher | 🟡 Implemented | Uses `chrome.identity.launchWebAuthFlow`; requires end-to-end validation. |
-| Chrome transaction storage | 🟡 Implemented | Uses `chrome.storage.session`; cleanup on every failure path needs work. |
-| Authorization callback parsing | 🟡 Basic implementation | Parses errors/code/state. Explicit comparison against the originally generated state is not yet performed. |
-| Server-side OAuth transaction registration | 🔴 Not wired in SDK | Worker exposes `POST /v1/state`; current SDK flow does not call it. |
-| Code exchange | 🔴 Contract mismatch | SDK sends form-urlencoded fields and omits `state`; worker currently parses JSON and requires a UUID `state`. |
-| Session lookup | 🟡 Implemented | SDK calls `GET /v1/session`; confirm response schema and cookie behavior in integration tests. |
-| Logout | 🟡 Worker implemented, SDK missing | Worker exposes `POST /v1/logout`; SDK method remains a TODO. |
-| Web platform | 🔴 Not implemented | The branch ends in a Promise that never settles. |
-| Endpoint/environment configuration | 🔴 Incomplete | Client hardcodes `http://127.0.0.1:8787/v1`; constants in `src/config.ts` are not consistently used. |
-| Automated SDK tests | 🔴 Not sufficient | No test script is present in the SDK package manifest. |
-| Developer documentation | 🟡 Added in this branch | Review and keep synchronized with API changes. |
-| Public SDK readiness | 🔴 Not ready | End-to-end contract, tests, errors, browser support, and release criteria remain. |
+| RT-001 — concurrent refresh | A stale concurrent invalid_grant must not revoke a session whose refresh token was already rotated by another request | PostgreSQL integration test passed |
+| RT-002 — logout during refresh | Logout must prevail over refresh operations that are still in flight; refresh must not reactivate the revoked local session | PostgreSQL integration test passed |
 
-## Phase 0 — Make the existing extension flow coherent (P0)
+Evidence:
 
-- [ ] Agree and document the canonical request/response schemas for `/v1/state`, `/v1/exchange`, `/v1/session`, `/v1/logout`, and `/v1/user/me`.
-- [ ] Align state format between SDK and worker (UUID versus hex), or change the server contract deliberately and consistently.
-- [ ] Register OAuth transaction state with `POST /v1/state` if this endpoint remains part of the design.
-- [ ] Send the exchange body in the format the worker actually accepts; include all required fields, especially `state`.
-- [ ] Use the transaction's stored `redirectUri` when exchanging, rather than relying only on mutable client config.
-- [ ] Add explicit state equality/transaction validation and remove temporary transaction data in every success/failure path.
-- [ ] Add the SDK call to `POST /v1/logout` with `credentials: "include"`.
-- [ ] Replace the localhost endpoint constant with explicit development/production configuration.
-- [ ] Ensure HTTP error handling safely handles non-JSON responses and malformed response payloads.
+- Branch: test/auth-refresh-concurrency-rt001 in [NinjaURL-URL-Shortener](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener).
+- [RT-001 CI run 41073531083](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41073531083) — success.
+- [RT-002 CI run 41078846722](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41078846722) — success.
+- PostgreSQL persistence is real (Neon test database); identity-provider HTTP responses are mocked.
+- The test branch has not been merged or deployed.
 
-**Exit criteria:** a clean install of the extension can log in, retrieve the session, log out, and log in again; invalid state/code and network/server errors fail predictably; the cookie is cleared on logout.
+The implementation uses conditional database updates as optimistic concurrency guards. This is not a distributed lock. The tests prove the specific scenarios they orchestrate, not all possible race conditions.
 
-## Phase 1 — Security and reliability (P1)
+### Additional backend improvement
 
+- The logout route now closes its database client in a finally block, including error paths.
+
+## Current SDK source snapshot
+
+The following status reflects the SDK source inspected on its current default branch, not uncommitted local work or code that may exist elsewhere.
+
+| Area | Status | Notes |
+|---|---|---|
+| TypeScript package/build setup | 🟡 Present | tsup builds ESM, CJS, types, and IIFE; release hardening remains |
+| init() | 🟡 Basic implementation | Validates client ID and redirect URI; platform defaults to web even though Web is not implemented |
+| PKCE S256 | 🟢 Implemented | Needs SDK unit tests |
+| OAuth state | 🟡 Implemented, format mismatch | SDK generator emits hex; Worker exchange schema expects UUID |
+| Chrome authorization launcher | 🟡 Implemented | Needs full end-to-end validation |
+| Chrome transaction storage | 🟡 Implemented | Cleanup on all failure paths needs review |
+| Callback validation | 🔴 Incomplete | Explicit comparison with the originally generated state is missing |
+| Code exchange | 🔴 Contract mismatch | SDK sends form-urlencoded and omits required state; Worker expects JSON |
+| Session lookup | 🟡 Implemented | Uses GET /v1/session; response handling needs stronger runtime validation |
+| Logout | 🔴 SDK incomplete | Worker route exists; SDK method is a TODO |
+| Web platform | 🔴 Not implemented | Current branch can leave the login promise pending |
+| Endpoint configuration | 🔴 Incomplete | Client hardcodes localhost instead of using explicit environment configuration |
+| SDK automated tests | 🔴 Missing | Package manifest has no test script |
+| Stable public API and release | 🔴 Not ready | Contract, errors, platform behavior, tests, and release criteria remain |
+
+## Remaining work — priority order
+
+### P0 — Close the Extension authentication flow
+
+- [ ] Align SDK /v1/exchange request with the Worker JSON schema, including UUID state.
+- [ ] Add explicit callback state equality validation against the initiated transaction.
+- [ ] Use the transaction's stored redirect URI during exchange.
+- [ ] Ensure transaction cleanup on launcher rejection, OAuth denial, callback parse errors, exchange failure, and success.
+- [ ] Replace the hardcoded localhost base URL with explicit development/production endpoint configuration.
+- [ ] Verify the exact exchange success/error envelope and data.user shape against the Worker response helpers.
+- [ ] Validate HTTP status and response JSON safely, including non-JSON and malformed responses.
+- [ ] Complete extension login end-to-end against the intended Auth Worker environment.
+- [ ] Verify cookie creation and subsequent authenticated session lookup.
+
+**Exit condition:** a clean extension install can log in, retrieve the session, log out, and log in again; invalid state/code and network/server errors fail predictably.
+
+### P0 — Complete session lifecycle in the SDK
+
+- [ ] Validate getSession() for anonymous, active, near-expiry, refreshed, revoked, expired, and temporary provider failure cases.
+- [ ] Ensure getSession() never starts interactive login.
+- [ ] Implement NinjaAuth.logout() using POST /v1/logout with credentials: "include".
+- [ ] Define SDK behavior for already-anonymous sessions and partial upstream revocation failures.
+- [ ] Verify that a subsequent session lookup after logout returns unauthenticated.
+
+**Exit condition:** the public SDK reliably exposes the central session lifecycle and logout invalidates the local session server-side.
+
+### P1 — SDK security and test foundation
+
+- [ ] Add a test runner and CI for the SDK package.
 - [ ] Add unit tests for PKCE, state generation/validation, callback parsing, request construction, and response parsing.
 - [ ] Add integration tests against a mocked Auth Worker contract.
-- [ ] Test OAuth denial, missing code/state, state mismatch, expired transaction, exchange failure, and browser cancellation.
-- [ ] Guarantee transaction cleanup on every path, including launcher rejection and callback parsing errors.
-- [ ] Review cookie attributes, CORS/credentials behavior, and supported origins with the worker deployment configuration.
-- [ ] Define whether remote token revocation failure is reported, logged, or represented as a partial logout result.
-- [ ] Add stable typed SDK error codes while preserving useful underlying causes.
-- [ ] Verify that no access token, refresh token, verifier, or raw session secret is logged or unnecessarily exposed to application code.
+- [ ] Test OAuth denial, missing code/state, state mismatch, expired/reused transaction, exchange failure, network failure, and browser cancellation.
+- [ ] Add typed SDK error codes while preserving underlying causes.
+- [ ] Confirm no token, verifier, or raw session secret is logged or unnecessarily exposed.
+- [ ] Verify cookie attributes, CORS, and credentialed requests from each supported origin.
 
-**Exit criteria:** security-sensitive paths are covered by automated tests and the documented behavior matches observed worker behavior.
+### P1 — Finish and validate backend concurrency coverage
 
-## Phase 2 — Stable SDK API (P1)
+The following are open investigation/test items. They are not asserted defects until their exact ordering and expected behavior are established.
 
-- [ ] Finalize public types and method contracts for `init`, `login`, `getSession`, and `logout`.
-- [ ] Decide whether the public SDK is a singleton or supports independent client instances.
-- [ ] Decide and document supported platforms rather than defaulting silently to an unimplemented web flow.
+- [ ] Analyze the resolver return window: logout may happen after refresh succeeds but before resolveSession() finishes returning an authenticated result.
+- [ ] Analyze late upstream rotation: logout may revoke R1 while refresh is in flight, after which the provider may return R2. Determine whether R2 must be revoked upstream even though the local session remains revoked.
+- [ ] Add focused tests for relevant timeout, provider failure, duplicate logout, absolute expiry, and additional refresh/logout orderings according to risk.
+- [ ] Keep tests explicit about real PostgreSQL state versus mocked provider behavior.
+- [ ] Preserve the invariant that a revoked local session can never be reactivated by refresh.
+
+### P1 — Stabilize the public SDK contract
+
+- [ ] Finalize public types and contracts for init, login, getSession, and logout.
+- [ ] Decide whether the SDK remains a singleton or supports independent client instances.
+- [ ] Do not silently default to an unsupported platform; reject unsupported platform use explicitly until implemented.
 - [ ] Normalize user/session response types and nullability.
 - [ ] Add timeout/cancellation behavior where appropriate.
 - [ ] Define semantic-versioning and compatibility policy.
+- [ ] Decide and document the public status of NinjaAppAdapter<TProfile>; do not imply it is available until implemented and exported.
 
-**Exit criteria:** API behavior is deterministic, documented, and tested; no public method silently hangs.
-
-## Phase 3 — Web support (P2)
+### P2 — Web support
 
 - [ ] Design the web redirect/callback lifecycle.
 - [ ] Define browser storage and multi-tab transaction handling.
-- [ ] Validate same-site cookie behavior, CORS, and credentialed requests for the production domains.
-- [ ] Implement web login or reject the platform explicitly until it is supported.
+- [ ] Validate same-site cookie behavior, CORS, and credentialed requests for production domains.
+- [ ] Implement the Web launcher and transaction storage.
+- [ ] Reject unsupported Web use explicitly until the implementation is complete.
 - [ ] Add browser-level integration tests.
 
-**Exit criteria:** the web flow has a separate, reviewed implementation and documented browser support.
+### P2 — Developer experience and release
 
-## Phase 4 — Developer experience and release (P2)
-
-- [ ] Add copy-paste examples for Chrome extension and web once each flow is supported.
-- [ ] Document required OAuth client configuration and redirect URI registration.
+- [ ] Add copy-paste examples for supported platforms.
+- [ ] Document OAuth client configuration and redirect URI registration.
 - [ ] Add CI for typecheck, unit tests, build, and package inspection.
-- [ ] Confirm published package contents include only intended artifacts.
+- [ ] Confirm package contents include only intended artifacts.
 - [ ] Add changelog, license, support policy, and release checklist.
-- [ ] Publish a version only after the extension end-to-end exit criteria are met.
+- [ ] Publish only after the extension end-to-end and session lifecycle exit criteria pass.
 
-## Suggested execution order
+## Future scope — not Core 0.1
 
-1. **Contract first:** settle request/response schemas with the Auth Worker.
-2. **Fix extension login:** state registration, state format, exchange payload, cleanup.
-3. **Implement SDK logout and verify session behavior.**
-4. **Add tests before broadening platform support.**
-5. **Implement web support as a separate milestone.**
-6. **Release only after end-to-end validation.**
+- Provider management and dynamic provider selection.
+- Account linking, MFA, passkeys, and device management.
+- Application profile management.
+- Product roles, permissions, and capabilities.
+- Analytics and plan-specific provider availability.
 
-## Out of scope for this roadmap
+These remain separate from the Core identity/session contract.
 
-This document does not claim that the Auth Worker or Authgear deployment has been tested live. It records repository-level observations and the work needed to validate the complete system.
+## Definition of Done — NinjaAuth Core 0.1
+
+Core 0.1 is complete only when the implementation, tests, and documentation agree that the following works on every platform explicitly declared as supported:
+
+~~~ts
+NinjaAuth.init(config);
+const user = await NinjaAuth.login();
+const session = await NinjaAuth.getSession();
+await NinjaAuth.logout();
+~~~
+
+Required evidence:
+
+- OAuth and PKCE work, and state is validated.
+- Session creation, restoration, refresh, and logout behave as documented.
+- SDK and Worker request/response contracts match.
+- Automated tests and CI cover critical success and failure paths.
+- No platform-specific dependency leaks into the platform-agnostic Core.
+- Product-specific authorization remains with the consuming product.
+- No unsupported platform silently hangs.
+- The release artifact and public documentation describe the same API.
+
+Only then should Core 0.1 be frozen and released.
