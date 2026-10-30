@@ -1,78 +1,109 @@
 # NinjaAuth SDK — Architecture
 
-## Purpose and boundaries
+## Purpose
 
-NinjaAuth is the client-side integration layer for Ninja Connect authentication. It should make the authentication lifecycle straightforward for application developers while keeping security-sensitive session operations on the server.
+NinjaAuth is the client-side SDK for integrating applications with **Ninja Connect**, the central identity and session service.
 
-### Responsibilities
+The SDK must be usable both by products in the Ninja ecosystem and by independent third-party applications.
 
-**SDK**
-- Build authorization requests and generate PKCE material.
-- Generate and validate OAuth `state`.
-- Launch the platform-specific authorization UI.
-- Exchange the authorization result through the Ninja Connect API.
-- Offer stable methods such as `init()`, `login()`, `getSession()`, and `logout()`.
-- Translate HTTP and OAuth failures into predictable SDK errors.
+## Responsibility boundaries
 
-**Ninja Connect Auth Worker**
-- Store short-lived OAuth transaction state.
-- Exchange the authorization code with the identity provider.
-- Create the Ninja Connect application session.
-- Store only a hash of the session secret in the database.
-- Validate/refresh sessions and revoke them on logout.
-- Set and clear the `ninja_session` cookie.
+### Ninja Connect
 
-**Identity provider (currently Authgear)**
-- Authenticate the user and issue OAuth tokens.
-- Supply user identity claims.
-- Support token refresh and, where available, token revocation.
+Ninja Connect is the shared **Identity Broker**. Its responsibilities are authentication through configured identity providers, resolution of the shared Ninja Connect identity, and creation, validation, refresh, and revocation of the central application session.
 
-The SDK must not handle database credentials, refresh-token encryption keys, or raw session secrets.
+Ninja Connect keeps session secrets and upstream refresh tokens server-side and sets/clears the ninja_session cookie.
 
-## Current components in this repository
+Ninja Connect does **not** own the business authorization model of every application that uses it.
 
-- `src/NinjaAuth.ts`: public SDK client and lifecycle methods.
-- `src/config.ts`: central endpoint/scope constants (currently not consistently used by the client).
-- `src/oauth/authorization.ts`: authorization URL construction and callback parsing.
-- `src/oauth/state.ts`: random OAuth state generation.
-- `src/utils/pkce.ts`: PKCE verifier and S256 challenge generation.
-- `src/platform/chrome/AuthorizationLauncher.ts`: Chrome Identity API authorization launcher.
-- `src/platform/chrome/TransactionStorage.ts`: temporary OAuth transaction storage using `chrome.storage.session`.
-- `src/types/types.ts`: public configuration, user/session, and transaction types.
+### NinjaAuth SDK
 
-## Intended extension flow
+The SDK generates PKCE material and OAuth state, launches platform-specific authorization UI, validates callbacks, exchanges authorization results through Ninja Connect, and exposes a stable API such as init(), login(), getSession(), and logout().
 
-1. Application calls `NinjaAuth.init(config)`.
-2. SDK generates a high-entropy PKCE verifier/challenge and an unpredictable `state`.
-3. SDK starts an authorization transaction with the server if required by the API contract.
-4. SDK opens the authorization URL through `chrome.identity.launchWebAuthFlow`.
-5. SDK parses the redirect and validates that the returned `state` matches the initiated transaction.
-6. SDK sends the authorization code, verifier, state, client ID, and redirect URI to the exchange endpoint using the exact agreed request schema.
-7. Worker validates the transaction, exchanges the code, resolves the Ninja Connect identity, creates the server-side session, and sets the session cookie.
+The SDK must not contain database credentials, refresh-token encryption keys, or raw server session secrets.
+
+### Consuming application
+
+Each application owns its own application data and authorization rules: application profile and preferences, roles and permissions local to that product, product-specific capabilities and business rules, and application data persistence.
+
+For example, NinjaURL must not need to know that NinjaReviews exists. Ninja Connect provides shared identity; each product independently decides what that identity may do inside that product.
+
+### Optional Ninja ecosystem adapter
+
+The planned **NinjaAppAdapter<TProfile>** is an optional integration boundary for first-party Ninja products. It allows a product to enrich shared identity with its own typed application profile without adding product-specific fields to the central NinjaUser.
+
+This adapter is distinct from OAuth/platform adapters such as a Chrome authorization launcher or a Web transaction store.
+
+- Standalone third-party use: the application can use NinjaAuth without a NinjaAppAdapter.
+- First-party product use: a product may supply its own adapter/profile integration.
+- Product authorization remains in the product backend; the adapter does not centralize RBAC in Ninja Connect.
+
+**Status:** architectural direction, not a claim that NinjaAppAdapter<TProfile> is currently exported or implemented in the SDK public API.
+
+## Identity and authorization are separate
+
+Keep these concepts distinct:
+
+- **Ninja Connect user ID:** stable shared identity identifier exposed to applications.
+- **Identity provider subject (sub):** upstream identifier used internally to map provider identity.
+- **Product user/profile:** application-owned record associated with shared identity.
+- **Product roles/permissions/capabilities:** authorization decisions owned by the relevant product.
+
+Ninja Connect authenticates and identifies the user. It must not become the central RBAC authority for NinjaURL, Ninja Game, NinjaReviews, or independent third-party applications.
+
+## Current SDK components
+
+The inspected repository source includes:
+
+- src/NinjaAuth.ts: public singleton client and lifecycle methods.
+- src/config.ts: endpoint/scope constants, not yet consistently used by the client.
+- src/oauth/authorization.ts: authorization URL construction and callback parsing.
+- src/oauth/state.ts: OAuth state generation.
+- src/utils/pkce.ts: PKCE verifier and S256 challenge generation.
+- src/platform/chrome/AuthorizationLauncher.ts: Chrome Identity API launcher.
+- src/platform/chrome/TransactionStorage.ts: temporary transaction storage using chrome.storage.session.
+- src/types/types.ts: SDK configuration, user/session, and transaction types.
+
+The inspected source still contains a localhost API base URL, an incomplete Web branch, and a TODO in logout(). See the [roadmap](ROADMAP.md).
+
+## Intended extension authentication flow
+
+1. Application calls NinjaAuth.init(config).
+2. SDK generates a high-entropy PKCE verifier/challenge and unpredictable state in the format required by the Worker.
+3. SDK stores the short-lived client-side transaction.
+4. SDK opens the authorization URL through chrome.identity.launchWebAuthFlow.
+5. SDK parses the callback and verifies returned state against the initiated transaction.
+6. SDK sends authorization code, verifier, state, client ID, and redirect URI using the agreed exchange schema.
+7. Worker validates the exchange, contacts the identity provider, resolves the Ninja Connect identity, creates the server-side session, and sets the session cookie.
 8. SDK returns the normalized Ninja Connect user profile.
 
-**Current status:** steps are only partially wired together. In particular, the SDK does not currently register state with the worker, the SDK state generator emits hex while the worker schema expects a UUID, and the exchange request body does not match the worker's JSON schema. See [API contract](API-CONTRACT.md).
+The exact exchange contract must be aligned before this flow is considered complete. The experimental /v1/state endpoint is not a required step in the intended SDK flow; do not reintroduce it as an SDK dependency without an explicit architecture decision.
 
-## Session retrieval
+## Session architecture
 
-The SDK calls `GET /v1/session` with `credentials: "include"`. The browser attaches the cookie where browser cookie policy permits it. The worker validates the session and may refresh the upstream OAuth token.
+The browser holds an opaque HttpOnly session cookie. SDK JavaScript must not read or persist the raw session secret.
 
-The SDK should treat the cookie as opaque. Do not expose the session secret to JavaScript or persist it in extension storage/local storage.
+At a high level, the Worker generates a cryptographically random session secret, stores only its hash in the database, stores the upstream refresh token encrypted at rest, resolves the cookie to an active database session, refreshes upstream credentials server-side when required, and revokes the local session during logout while attempting upstream token revocation.
 
-## Logout
+The session has both a normal expiry and an absolute expiry. A refresh must never extend the absolute lifetime or reactivate a revoked session.
 
-The Auth Worker implements `POST /v1/logout`. Its intended behavior is to revoke the local session, attempt remote refresh-token revocation, and clear the `ninja_session` cookie.
+## Concurrency and session invariants
 
-The SDK's public `logout()` method is still a TODO in the current source. It should call the worker endpoint with `credentials: "include"`, handle the response consistently, and document that local application-session revocation is distinct from guaranteed remote token revocation.
+The Worker has been tested for two important refresh-token rotation races:
+
+- A stale concurrent refresh receiving invalid_grant must not revoke a session whose refresh token was already rotated by another request.
+- A logout that completes while refresh operations are in flight must prevail; a later refresh result must not reactivate the revoked database session.
+
+The implementation uses conditional database updates as optimistic concurrency guards. This is not a distributed mutex and does not prove that every possible interleaving is covered. See [API contract — backend concurrency verification](API-CONTRACT.md#backend-concurrency-verification).
 
 ## Web platform
 
-The `platform: "web"` branch is currently unimplemented. Before enabling it, define the redirect/callback handling strategy, storage strategy, cookie/CORS requirements, and supported browser environments. Do not silently allow a web login promise to remain pending.
+The platform: "web" branch is not implemented in the inspected source. Before enabling it, define redirect/callback handling, transaction storage, cookie/CORS requirements, and supported browser environments. A public method must never remain pending indefinitely for an unsupported platform.
 
-## Identity mapping
+## Security boundaries
 
-Keep these identifiers distinct:
-- **Ninja Connect user ID:** the application-facing user identifier returned by the worker.
-- **Identity provider subject (`sub`):** the upstream identity-provider identifier used internally for account mapping.
-
-Application code should use the Ninja Connect ID, not infer or reconstruct the upstream subject.
+- Never expose access tokens, refresh tokens, encryption keys, database credentials, or raw session secrets unnecessarily to application code.
+- Do not use decoded-but-unverified JWT claims as an authorization source.
+- If a service accepts an access token as a credential, that service must validate its signature, issuer, audience, expiry, and relevant claims.
+- Do not add JWT validation to a flow that relies exclusively on a server-side session cookie unless the token is actually being accepted as a credential.
+- Keep application-specific authorization in the consuming product.
