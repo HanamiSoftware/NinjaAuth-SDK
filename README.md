@@ -1,21 +1,22 @@
 # NinjaAuth SDK
 
-NinjaAuth is the TypeScript SDK for integrating applications with the Ninja Connect authentication service. This repository currently contains an early implementation focused on the Chrome extension flow; the web flow and the public SDK contract are still under development.
+NinjaAuth is the TypeScript client SDK for integrating applications with **Ninja Connect**, the identity and session service.
 
-> **Status:** early development — not yet ready to be treated as a stable public SDK. See the [roadmap](docs/ROADMAP.md) before integrating it into a production application.
+> **Development status:** NinjaAuth Core 0.1 is not yet release-ready. The inspected SDK source still has an incomplete exchange contract, a local development endpoint, an unfinished Web flow, a placeholder logout method, and no SDK test suite in its package scripts. Recent refresh/logout concurrency tests validate important backend invariants, but are not a complete live Authgear end-to-end test.
 
 ## Documentation
 
-- [Architecture and authentication flows](docs/ARCHITECTURE.md)
-- [Roadmap and current implementation status](docs/ROADMAP.md)
+All detailed documentation lives under **docs/**. Start with the [documentation index](docs/README.md).
+
+- [Architecture and responsibility boundaries](docs/ARCHITECTURE.md)
+- [SDK ↔ Auth Worker API contract](docs/API-CONTRACT.md)
+- [Implementation roadmap and audit status](docs/ROADMAP.md)
+- [Core 0.1 checkpoint](docs/NINJAAUTH-CORE-CHECKPOINT.md)
 - [Development guide](docs/DEVELOPMENT.md)
-- [HTTP API contract and known mismatches](docs/API-CONTRACT.md)
 
-## Quick start (current implementation)
+## Quick start — intended API shape
 
-The current API exposes a singleton:
-
-```ts
+~~~ts
 import { NinjaAuth } from "@ninjaconnect/auth";
 
 NinjaAuth.init({
@@ -26,21 +27,23 @@ NinjaAuth.init({
 
 const user = await NinjaAuth.login();
 const session = await NinjaAuth.getSession();
-```
+~~~
 
-This example describes the intended usage shape, **not a claim that the current end-to-end flow is production-ready**. Before using it, review the API contract: the SDK and the Auth Worker currently disagree on the exchange request format and required parameters. The `web` platform is not implemented, and `logout()` is currently a stub in the SDK.
+This illustrates the intended developer experience; it is **not** a guarantee that the current implementation completes the full flow. Review the [roadmap](docs/ROADMAP.md) and [API contract](docs/API-CONTRACT.md) before integrating it.
 
-## Core design principles
+## Core principles
 
-- The SDK orchestrates authentication; server-side session creation, validation, and revocation belong to the Ninja Connect Auth Worker.
-- The browser session secret is stored in an `HttpOnly` cookie and must not be read or managed by SDK JavaScript.
-- PKCE and OAuth `state` protect the authorization flow; they must be validated and consistently handled across the SDK and server.
-- The Ninja Connect user ID is distinct from the identity provider's subject (`sub`). Application code should use the Ninja Connect user ID returned by the service.
-- Environment-specific endpoints must be configured explicitly. Local development URLs must not ship as production defaults.
+- Ninja Connect owns shared identity, authentication, and the central session lifecycle.
+- NinjaAuth orchestrates the client-side authentication flow; it does not manage database credentials, refresh-token encryption keys, or raw session secrets.
+- The SDK can be used by applications outside the Ninja ecosystem.
+- Product-specific profiles, roles, permissions, and capabilities remain owned by each application.
+- The optional **NinjaAppAdapter<TProfile>** is an integration boundary for Ninja ecosystem products; it must not turn product-specific data into shared identity data.
+- OAuth state and PKCE must be validated across client and server. Session secrets remain opaque to SDK JavaScript.
+- A passing focused concurrency test is evidence for the tested interleaving, not proof that every possible distributed execution has been covered.
 
 ## Repository scope
 
-This repository documents and implements the client SDK. The corresponding server-side worker lives in the [NinjaURL repository](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker).
+This repository contains the NinjaAuth client SDK and its documentation. The corresponding [Ninja Connect Auth Worker](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker) currently resides in the NinjaURL repository. Its recent reliability tests were developed on a separate branch there; see the [roadmap](docs/ROADMAP.md) for exact status.
 
 ## License
 
