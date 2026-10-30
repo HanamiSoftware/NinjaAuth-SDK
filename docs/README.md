@@ -14,11 +14,8 @@ This directory is the **single source of truth for project documentation**. The 
 
 ## Documentation rules
 
-- Keep the **only active roadmap** in ROADMAP.md. Do not create a second roadmap in the repository root.
 - Update the roadmap and the relevant technical document whenever implementation behavior or a verified test result changes.
 - Distinguish clearly between **implemented**, **tested**, **verified in a specific scenario**, **planned**, and **not yet tested**.
-- Record the repository, branch, CI run, and test boundary for cross-repository evidence.
-- Do not describe a branch-only change as merged, deployed, or released.
 - Keep product-specific authorization and profile data out of the shared Ninja Connect identity contract.
 
 ## Related implementation repositories
@@ -26,4 +23,4 @@ This directory is the **single source of truth for project documentation**. The 
 - [NinjaAuth SDK](https://github.com/HanamiSoftware/NinjaAuth-SDK)
 - [Ninja Connect Auth Worker (current location)](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker)
 
-The Worker is intended to move to its dedicated Ninja Connect repository after the audit and transfer planning are complete. That move has not been performed.
+The Worker is intended to move to its dedicated Ninja Connect repository after the audit and transfer planning are complete.
