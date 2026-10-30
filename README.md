@@ -29,7 +29,7 @@ const user = await NinjaAuth.login();
 const session = await NinjaAuth.getSession();
 ~~~
 
-This illustrates the intended developer experience; it is **not** a guarantee that the current implementation completes the full flow. Review the [roadmap](docs/ROADMAP.md) and [API contract](docs/API-CONTRACT.md) before integrating it.
+This illustrates the intended developer experience; it is **not** a guarantee that the current implementation completes the full flow. Review the [roadmap](docs/ROADMAP.md) before integrating it.
 
 ## Core principles
 
