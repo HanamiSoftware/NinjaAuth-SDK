@@ -72,7 +72,7 @@ Tre scenari critici del Worker hanno superato test d'integrazione PostgreSQL (pe
 | RT-002 | Un logout completato mentre refresh è in volo deve prevalere; il refresh non deve riattivare la sessione locale | PASS |
 | RT-003 | Un logout committato prima della revalidazione finale del resolver deve impedire il ritorno di un contesto autenticato | Test d'integrazione aggiunto; CI owner-reported PASS |
 
-I test sono stati eseguiti sul branch test/auth-refresh-concurrency-rt001 del repository NinjaURL, con PostgreSQL/Neon reale e risposte HTTP dell'identity provider simulate.
+RT-001/RT-002 sono sul branch `test/auth-refresh-concurrency-rt001`; RT-003 è sul branch `test/authgear-refresh-live-diagnostic` del repository NinjaURL. I test usano PostgreSQL/Neon reale e risposte HTTP dell'identity provider simulate.
 
 - [CI RT-001](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41073531083)
 - [CI RT-002](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41078846722)
