@@ -5,7 +5,7 @@
 
 ## Executive status
 
-NinjaAuth Core 0.1 is **not release-ready**. The central architecture is defined, and two important Auth Worker concurrency scenarios have passed PostgreSQL integration tests. However, the inspected SDK source still has an incomplete extension exchange contract, a local development endpoint, an unfinished Web platform, a placeholder logout method, and no SDK test suite in its package scripts.
+NinjaAuth Core 0.1 is **not release-ready**. The central architecture is defined, and three focused Auth Worker concurrency scenarios have passed PostgreSQL integration tests. However, the inspected SDK source still has an incomplete extension exchange contract, a local development endpoint, an unfinished Web platform, a placeholder logout method, and no SDK test suite in its package scripts.
 
 The backend test results below are branch-only evidence. They have not been merged or deployed.
 
@@ -19,10 +19,12 @@ The backend test results below are branch-only evidence. They have not been merg
 - Product-specific RBAC must not be moved into Ninja Connect.
 - The experimental /v1/state endpoint is not a required part of the SDK flow and may be removed. Do not make the SDK depend on it without an explicit architecture decision.
 - No Worker repository transfer, merge, or deployment is included in the completed test work.
+- AuthGear is the current upstream identity provider, not the owner of Ninja Connect application sessions. AuthGear SSO sessions and Ninja Connect `auth_sessions` records are separate lifecycles.
+- The public NinjaAuth API must remain provider-neutral. AuthGear-specific endpoints, credentials, refresh tokens, and provider secrets remain behind Ninja Connect; OIDC Discovery/interoperability is a planned capability.
 
 ## Completed and verified work
 
-### Auth Worker reliability — RT-001 and RT-002
+### Auth Worker reliability — RT-001, RT-002, and RT-003
 
 **PASS — focused integration tests**
 
@@ -30,6 +32,7 @@ The backend test results below are branch-only evidence. They have not been merg
 |---|---|---|
 | RT-001 — concurrent refresh | A stale concurrent invalid_grant must not revoke a session whose refresh token was already rotated by another request | PostgreSQL integration test passed |
 | RT-002 — logout during refresh | Logout must prevail over refresh operations that are still in flight; refresh must not reactivate the revoked local session | PostgreSQL integration test passed |
+| RT-003 — logout before resolver return | A session revoked before the resolver's final revalidation must not be returned as authenticated | Focused PostgreSQL integration test; CI owner-reported successful |
 
 Evidence:
 
@@ -37,13 +40,21 @@ Evidence:
 - [RT-001 CI run 41073531083](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41073531083) — success.
 - [RT-002 CI run 41078846722](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41078846722) — success.
 - PostgreSQL persistence is real (Neon test database); identity-provider HTTP responses are mocked.
-- The test branch has not been merged or deployed.
+- The test branches have not been merged or deployed.
+- RT-003 implementation commit: `7d89d4412cd85727578225517b8f03ed58f71aa3`; regression test commit: `65c8127377ebcb3c8712452f223a07fd0b1649d1`.
+- RT-003 test: `Workers/auth-worker/integration-tests/resolve-session-logout-race.integration.test.ts`; it uses real Neon/PostgreSQL state, a mocked upstream refresh, and the real Worker logout route. CI run [41196276386](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41196276386) was reported successful by the project owner; recheck before treating it as independently audited evidence.
 
-The implementation uses conditional database updates as optimistic concurrency guards. This is not a distributed lock. The tests prove the specific scenarios they orchestrate, not all possible race conditions.
+The implementation uses conditional database updates and a final session re-read as concurrency guards. These are not distributed locks. The tests prove the specific scenarios they orchestrate, not all possible race conditions.
+
+### RT-003 — final session revalidation before authenticated return
+
+**PASS — focused integration test added; CI reported successful by the project owner.**
+
+`resolveSession()` now performs a final read of the session row after refresh and user lookup, before returning an authenticated context. A missing, revoked, absolutely expired, or ordinarily expired session is rejected. This covers a logout that commits before the final read; it cannot prevent a logout that commits immediately afterward.
 
 ### Additional backend improvement
 
-- The logout route now closes its database client in a finally block, including error paths.
+- The logout route closes its database client in a `finally` block, including error paths.
 
 ## Current SDK source snapshot
 
@@ -89,6 +100,9 @@ The following status reflects the SDK source inspected on its current default br
 - [ ] Implement NinjaAuth.logout() using POST /v1/logout with credentials: "include".
 - [ ] Define SDK behavior for already-anonymous sessions and partial upstream revocation failures.
 - [ ] Verify that a subsequent session lookup after logout returns unauthenticated.
+- [ ] Document `/v1/logout` as current-session-only.
+- [ ] Decide whether a proposed `/v1/logout/all` belongs in the public SDK API or remains an account-management operation; it is not implemented.
+- [ ] Handle upstream revocation HTTP failures explicitly; the reviewed Worker handler does not currently check `response.ok` on the provider revoke response.
 
 **Exit condition:** the public SDK reliably exposes the central session lifecycle and logout invalidates the local session server-side.
 
@@ -104,9 +118,8 @@ The following status reflects the SDK source inspected on its current default br
 
 ### P1 — Finish and validate backend concurrency coverage
 
-The following are open investigation/test items. They are not asserted defects until their exact ordering and expected behavior are established.
+RT-003 covers logout committed before the resolver's final session revalidation. The following cases remain open investigation/test items; they are not asserted defects until their exact ordering and expected behavior are established.
 
-- [ ] Analyze the resolver return window: logout may happen after refresh succeeds but before resolveSession() finishes returning an authenticated result.
 - [ ] Analyze late upstream rotation: logout may revoke R1 while refresh is in flight, after which the provider may return R2. Determine whether R2 must be revoked upstream even though the local session remains revoked.
 - [ ] Add focused tests for relevant timeout, provider failure, duplicate logout, absolute expiry, and additional refresh/logout orderings according to risk.
 - [ ] Keep tests explicit about real PostgreSQL state versus mocked provider behavior.
@@ -124,6 +137,7 @@ The following are open investigation/test items. They are not asserted defects u
 
 ### P2 — Web support
 
+- [ ] Define platform-neutral authorization-launcher and transaction-storage interfaces before implementing platform adapters.
 - [ ] Design the web redirect/callback lifecycle.
 - [ ] Define browser storage and multi-tab transaction handling.
 - [ ] Validate same-site cookie behavior, CORS, and credentialed requests for production domains.
@@ -158,6 +172,15 @@ The following are open investigation/test items. They are not asserted defects u
 - [ ] Confirm package contents include only intended artifacts.
 - [ ] Add changelog, license, support policy, and release checklist.
 - [ ] Publish only after the extension end-to-end and session lifecycle exit criteria pass.
+
+## Near-term implementation plan — next working session
+
+1. Complete the Extension API contracts for `/v1/exchange`, `/v1/session`, `/v1/user/me`, and `/v1/logout`, including payloads, response/error envelopes, cookie behavior, CORS, and failure handling.
+2. Define platform-neutral SDK interfaces and the Web redirect/callback/transaction-storage flow.
+3. Integrate NinjaAuth into the extension background service worker; keep OAuth, PKCE, and session orchestration out of the sidepanel.
+4. Validate Extension login, session restoration, logout, and login-again end-to-end; add SDK tests.
+5. Decide whether global logout should be exposed by the SDK. `/v1/logout/all` remains a proposal, not an implemented route.
+6. Preserve provider neutrality: do not encode AuthGear-specific behavior in the public SDK contract. OIDC Discovery/interoperability remains a future architectural requirement.
 
 ## Future scope — not Core 0.1
 
