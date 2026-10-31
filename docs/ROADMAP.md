@@ -1,6 +1,6 @@
 # NinjaAuth — Roadmap and implementation status
 
-> **Last reviewed:** 30 October 2026  
+> **Last reviewed:** 31 October 2026  
 > This is the only authoritative roadmap for the NinjaAuth SDK and its integration with Ninja Connect. The repository-root ROADMAP.md has been retired; use this document.
 
 ## Executive status
@@ -131,6 +131,25 @@ The following are open investigation/test items. They are not asserted defects u
 - [ ] Reject unsupported Web use explicitly until the implementation is complete.
 - [ ] Add browser-level integration tests.
 
+### P2 — OIDC Discovery and provider interoperability
+
+**Goal:** make the identity-provider integration replaceable without changing the public NinjaAuth API or coupling consuming applications to a specific provider. Authgear remains the current provider; this work is about interoperability, not a planned provider migration.
+
+- [ ] Define the trusted OIDC issuer configuration for Ninja Connect and the public discovery URL (for example, the well-known OpenID Connect configuration document on the stable Ninja Connect authentication domain).
+- [ ] Add an OIDC Discovery client that retrieves and parses the provider metadata document and maps the advertised endpoints and capabilities into a typed configuration.
+- [ ] Validate the metadata issuer against the configured/trusted issuer; require HTTPS for production endpoints and apply explicit endpoint and algorithm allow-lists.
+- [ ] Define which discovery metadata is consumed by NinjaAuth to initiate authorization and which metadata remains server-side for Ninja Connect's token exchange, user identity resolution, refresh, key retrieval, and revocation.
+- [ ] Keep provider-specific credentials, token exchange, refresh tokens, and server-side secrets inside Ninja Connect; do not move broker responsibilities into the browser SDK.
+- [ ] Define the minimum provider conformance profile: Authorization Code flow, PKCE S256, required OIDC claims and stable subject identifier, token response semantics, signing algorithms/JWKS validation, and required session lifecycle capabilities.
+- [ ] Treat optional metadata and capabilities (for example UserInfo, revocation, and supported logout mechanisms) explicitly; do not assume every provider implements every optional endpoint.
+- [ ] Add controlled metadata caching and refresh behavior, including handling for unavailable, malformed, stale, or inconsistent discovery documents.
+- [ ] Add conformance tests using Authgear as the first verified implementation and a standards-compliant test provider or mock as an interoperability fixture.
+- [ ] Document the public provider integration contract so that a provider implementation can be assessed against the same requirements without changing NinjaAuth's consumer-facing API.
+
+**Architecture guardrail:** NinjaAuth integrates with the stable Ninja Connect contract. Discovery may inform the authorization flow, but the SDK must not become coupled to Authgear-specific behavior or receive provider secrets. Ninja Connect remains responsible for the upstream identity-provider integration and central session lifecycle. The exact division of discovery consumption between SDK and broker must be finalized against the implemented authorization-flow contract before coding.
+
+**Exit condition:** the current Authgear integration continues to pass the conformance suite, and a second compatible provider can be integrated behind Ninja Connect without changing the public NinjaAuth API or consuming applications.
+
 ### P2 — Developer experience and release
 
 - [ ] Add copy-paste examples for supported platforms.
@@ -142,7 +161,7 @@ The following are open investigation/test items. They are not asserted defects u
 
 ## Future scope — not Core 0.1
 
-- Provider management and dynamic provider selection.
+- Provider management and dynamic provider selection beyond the interoperability contract described above.
 - Account linking, MFA, passkeys, and device management.
 - Application profile management.
 - Product roles, permissions, and capabilities.
