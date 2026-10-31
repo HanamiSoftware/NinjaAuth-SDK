@@ -83,11 +83,12 @@ The inspected source still contains a localhost API base URL, an incomplete Web 
 1. Application calls NinjaAuth.init(config).
 2. SDK generates a high-entropy PKCE verifier/challenge and unpredictable state in the format required by the Worker.
 3. SDK stores the short-lived client-side transaction.
-4. SDK opens the authorization URL through chrome.identity.launchWebAuthFlow.
-5. SDK parses the callback and verifies returned state against the initiated transaction.
-6. SDK sends authorization code, verifier, state, client ID, and redirect URI using the agreed exchange schema.
-7. Worker validates the exchange, contacts the identity provider, resolves the Ninja Connect identity, creates the server-side session, and sets the session cookie.
-8. SDK returns the normalized Ninja Connect user profile.
+4. The extension sidepanel sends an authentication command to the background service worker; the background owns NinjaAuth initialization and the authentication lifecycle.
+5. SDK opens the authorization URL through `chrome.identity.launchWebAuthFlow` from the extension background context.
+6. SDK parses the callback and verifies returned state against the initiated transaction.
+7. SDK sends authorization code, verifier, state, client ID, and redirect URI using the agreed exchange schema.
+8. Worker validates the exchange, contacts the identity provider, resolves the Ninja Connect identity, creates the server-side session, and sets the session cookie.
+9. SDK returns the normalized Ninja Connect user profile to the background, which updates the extension's authenticated state and informs the sidepanel.
 
 The exact exchange contract must be aligned before this flow is considered complete. The experimental /v1/state endpoint is not a required step in the intended SDK flow; do not reintroduce it as an SDK dependency without an explicit architecture decision.
 
