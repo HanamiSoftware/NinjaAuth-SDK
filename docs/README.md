@@ -17,6 +17,8 @@ This directory is the **single source of truth for project documentation**. The 
 - Update the roadmap and the relevant technical document whenever implementation behavior or a verified test result changes.
 - Distinguish clearly between **implemented**, **tested**, **verified in a specific scenario**, **planned**, and **not yet tested**.
 - Keep product-specific authorization and profile data out of the shared Ninja Connect identity contract.
+- Keep the public NinjaAuth API provider-neutral; AuthGear is the current upstream provider behind Ninja Connect, not an SDK dependency.
+- Record the evidence boundary for every concurrency result, including branch, test path, real database/provider mocks, and CI status.
 
 ## Related implementation repositories
 
