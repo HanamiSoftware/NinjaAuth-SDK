@@ -44,7 +44,7 @@ The following CI runs completed successfully on branch test/auth-refresh-concurr
 - [RT-001 — concurrent refresh with stale invalid_grant](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41073531083)
 - [RT-002 — logout during concurrent refresh](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41078846722)
 
-Both tests use real PostgreSQL persistence on the Neon test database and mock identity-provider HTTP responses. They are focused integration tests, not live Authgear end-to-end tests. The branch has not been merged or deployed.
+RT-001 and RT-002 use real PostgreSQL persistence on the Neon test database and mock identity-provider HTTP responses. RT-003 is a separate focused resolver/logout race test in `Workers/auth-worker/integration-tests/resolve-session-logout-race.integration.test.ts`; it uses real Neon/PostgreSQL state and a mocked upstream refresh response while exercising the real Worker logout route. CI run [41196276386](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41196276386) was reported successful by the project owner and should be independently rechecked. These are focused integration tests, not live AuthGear end-to-end tests. The branches have not been merged or deployed.
 
 ### Test boundaries
 
@@ -58,6 +58,19 @@ When a new concurrency issue is found:
 4. Verify persisted database state, not only HTTP responses.
 5. Record which dependencies are real and which are mocked.
 6. Add the scenario to the [API contract verification record](API-CONTRACT.md#backend-concurrency-verification).
+
+## Next integration work — Extension and Web
+
+Use a contract-first sequence:
+
+1. Finalize extension API schemas and response/error envelopes before changing SDK call sites.
+2. Keep the shared Core independent of Chrome APIs; platform-specific behavior belongs in adapters.
+3. Define Web redirect/callback and transaction storage interfaces, including multi-tab and credentialed-cookie behavior.
+4. Integrate the SDK into the extension background service worker; the sidepanel should communicate with the background rather than own OAuth state, PKCE, or session orchestration.
+5. Validate login, session restore, logout, and login-again against the intended Auth Worker environment.
+6. Add tests for success, cancellation, invalid state, malformed responses, network failure, and revoked/expired sessions.
+
+AuthGear remains the current upstream provider. Do not hardcode provider-specific assumptions in the SDK public contract. OIDC Discovery and provider interoperability are planned work; provider secrets and token lifecycle remain server-side in Ninja Connect.
 
 ## Security checklist
 
