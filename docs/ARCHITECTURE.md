@@ -4,7 +4,7 @@
 
 NinjaAuth is the client-side SDK for integrating applications with **Ninja Connect**, the central identity and session service.
 
-The SDK must be usable both by products in the Ninja ecosystem and by independent third-party applications.
+The SDK must be usable both by products in the Ninja ecosystem and by independent third-party applications. Its public API must remain independent of the upstream identity provider currently configured behind Ninja Connect.
 
 ## Responsibility boundaries
 
@@ -21,6 +21,18 @@ Ninja Connect does **not** own the business authorization model of every applica
 The SDK generates PKCE material and OAuth state, launches platform-specific authorization UI, validates callbacks, exchanges authorization results through Ninja Connect, and exposes a stable API such as init(), login(), getSession(), and logout().
 
 The SDK must not contain database credentials, refresh-token encryption keys, or raw server session secrets.
+
+### Upstream identity-provider boundary and OIDC interoperability
+
+AuthGear is the current upstream identity provider used by Ninja Connect. It is an implementation choice behind the broker, not a provider dependency that consuming applications or the public NinjaAuth API should know about.
+
+- Ninja Connect owns upstream authorization-code exchange, provider credentials, refresh tokens, provider-specific user resolution, key retrieval, and revocation.
+- NinjaAuth speaks the stable Ninja Connect `/v1/*` contract. It must not call AuthGear `/oauth2/*` endpoints directly or receive provider secrets.
+- Future OIDC Discovery/interoperability work must allow Ninja Connect to assess and integrate another conformant provider without changing the public NinjaAuth API or consuming applications.
+- Discovery metadata must be validated against a configured trusted issuer; production endpoints require HTTPS and explicit endpoint/algorithm allow-lists. Optional capabilities such as UserInfo, revocation, and provider logout must not be assumed universally available.
+- The exact division of discovery metadata consumed by a browser SDK versus retained server-side must be decided against the final authorization contract. Provider credentials and broker operations remain server-side regardless.
+
+This is an architectural constraint for current design, not a requirement to implement OIDC Discovery in the immediate extension integration milestone.
 
 ### Consuming application
 
@@ -64,7 +76,7 @@ The inspected repository source includes:
 - src/platform/chrome/TransactionStorage.ts: temporary transaction storage using chrome.storage.session.
 - src/types/types.ts: SDK configuration, user/session, and transaction types.
 
-The inspected source still contains a localhost API base URL, an incomplete Web branch, and a TODO in logout(). See the [roadmap](ROADMAP.md).
+The inspected source still contains a localhost API base URL, an incomplete Web branch, and a TODO in logout(). The current source snapshot and its limitations are recorded in the [roadmap](ROADMAP.md).
 
 ## Intended extension authentication flow
 
@@ -87,18 +99,29 @@ At a high level, the Worker generates a cryptographically random session secret,
 
 The session has both a normal expiry and an absolute expiry. A refresh must never extend the absolute lifetime or reactivate a revoked session.
 
+### Logout boundaries
+
+`POST /v1/logout` currently revokes only the session represented by the current cookie. A global operation (`/v1/logout/all`) has been proposed but is not implemented. AuthGear SSO logout is separate: it terminates the provider's SSO context but does not directly revoke rows in Ninja Connect `auth_sessions`. The same distinction applies to provider `/settings` versus any future Ninja Connect account/settings UI.
+
 ## Concurrency and session invariants
 
-The Worker has been tested for two important refresh-token rotation races:
+The Worker has been tested for three focused refresh/logout race scenarios:
 
 - A stale concurrent refresh receiving invalid_grant must not revoke a session whose refresh token was already rotated by another request.
 - A logout that completes while refresh operations are in flight must prevail; a later refresh result must not reactivate the revoked database session.
+- If logout commits before the resolver's final session revalidation, the resolver must reject the request rather than return an authenticated context.
 
 The implementation uses conditional database updates as optimistic concurrency guards. This is not a distributed mutex and does not prove that every possible interleaving is covered. See [API contract — backend concurrency verification](API-CONTRACT.md#backend-concurrency-verification).
 
-## Web platform
+## Platform boundaries: Extension and Web
 
-The platform: "web" branch is not implemented in the inspected source. Before enabling it, define redirect/callback handling, transaction storage, cookie/CORS requirements, and supported browser environments. A public method must never remain pending indefinitely for an unsupported platform.
+The Chrome extension implementation belongs behind platform adapters. The shared Core should depend on abstractions for authorization launch and short-lived OAuth transaction storage, not on `chrome.*` APIs.
+
+- Chrome adapter: uses `chrome.identity.launchWebAuthFlow` and extension-appropriate temporary storage (currently `chrome.storage.session`).
+- Web adapter: must use standard browser redirect/callback behavior and an explicitly designed transaction store; it must account for multi-tab behavior, origin boundaries, cookie policy, CORS, and credentialed requests.
+- The platform-neutral contract and lifecycle must be defined before implementing either adapter further. Unsupported platforms must fail explicitly; no login promise may remain pending indefinitely.
+
+The Web branch is not implemented in the inspected source.
 
 ## Security boundaries
 
