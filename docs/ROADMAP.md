@@ -36,7 +36,8 @@ The backend test results below are branch-only evidence. They have not been merg
 
 Evidence:
 
-- Branch: test/auth-refresh-concurrency-rt001 in [NinjaURL-URL-Shortener](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener).
+- RT-001/RT-002 branch: `test/auth-refresh-concurrency-rt001` in [NinjaURL-URL-Shortener](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener).
+- RT-003 branch: `test/authgear-refresh-live-diagnostic` in the same repository.
 - [RT-001 CI run 41073531083](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41073531083) — success.
 - [RT-002 CI run 41078846722](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41078846722) — success.
 - PostgreSQL persistence is real (Neon test database); identity-provider HTTP responses are mocked.
