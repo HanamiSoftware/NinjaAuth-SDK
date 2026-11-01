@@ -1,6 +1,6 @@
 # NinjaAuth — Roadmap and implementation status
 
-> **Last reviewed:** 31 October 2026  
+> **Last reviewed:** 1 November 2026  
 > This is the only authoritative roadmap for the NinjaAuth SDK and its integration with Ninja Connect. The repository-root ROADMAP.md has been retired; use this document.
 
 ## Executive status
@@ -45,35 +45,36 @@ The implementation uses conditional database updates as optimistic concurrency g
 
 - The logout route now closes its database client in a finally block, including error paths.
 
-## Current SDK source snapshot
+## Current SDK worktree snapshot
 
-The following status reflects the SDK source inspected on its current default branch, not uncommitted local work or code that may exist elsewhere.
+**Status boundary:** the repository's default branch may not yet contain the latest local edits described below. These notes record the developer's reported working-tree progress as of 1 November 2026; they are not a substitute for reviewing the synchronized source or running the complete validation suite.
 
-| Area | Status | Notes |
+| Area | Current status | Notes |
 |---|---|---|
-| TypeScript package/build setup | 🟡 Present | tsup builds ESM, CJS, types, and IIFE; release hardening remains |
-| init() | 🟡 Basic implementation | Validates client ID and redirect URI; platform defaults to web even though Web is not implemented |
-| PKCE S256 | 🟢 Implemented | Needs SDK unit tests |
-| OAuth state | 🟡 Implemented, format mismatch | SDK generator emits hex; Worker exchange schema expects UUID |
-| Chrome authorization launcher | 🟡 Implemented | Needs full end-to-end validation |
-| Chrome transaction storage | 🟡 Implemented | Cleanup on all failure paths needs review |
-| Callback validation | 🔴 Incomplete | Explicit comparison with the originally generated state is missing |
-| Code exchange | 🔴 Contract mismatch | SDK sends form-urlencoded and omits required state; Worker expects JSON |
-| Session lookup | 🟡 Implemented | Uses GET /v1/session; response handling needs stronger runtime validation |
-| Logout | 🔴 SDK incomplete | Worker route exists; SDK method is a TODO |
-| Web platform | 🔴 Not implemented | Current branch can leave the login promise pending |
-| Endpoint configuration | 🔴 Incomplete | Client hardcodes localhost instead of using explicit environment configuration |
-| SDK automated tests | 🔴 Missing | Package manifest has no test script |
-| Stable public API and release | 🔴 Not ready | Contract, errors, platform behavior, tests, and release criteria remain |
+| TypeScript Chrome API typings | 🟢 Installed locally | `@types/chrome` added as a development dependency; verify the package manifest/lockfile is synchronized |
+| Chrome transaction storage | 🟡 Type issue addressed locally | `chrome.storage.session.get()` result is asserted as `OAuthTransaction | undefined`; this is a compile-time assertion, not runtime validation |
+| Internal SDK error model | 🟡 Implemented locally | `NinjaAuthInternalError`, typed internal codes, original cause, and `NinjaAuthErrorException()`; not intended as public API |
+| OAuth callback parsing | 🟡 Implemented locally | Malformed callback, OAuth denial, and provider errors are classified |
+| Callback state comparison | 🟡 Implemented locally | Callback state is compared with the initiating state before exchange |
+| OAuth transaction cleanup | 🟡 Implemented locally | Cleanup is in a `finally` path; ensure cleanup errors cannot mask the primary failure |
+| Authorization scopes | 🟡 Adjusted locally | Defaults currently retain `openid` and `offline_access`; `profile`, `email`, and `resource` were removed from the builder |
+| UUID state format / exchange schema | 🔴 Open | Worker requires UUID state and JSON exchange body including state; full alignment has not been verified |
+| Session lookup validation | 🔴 Next task | Must distinguish successful anonymous response from temporary/server/malformed-response failures |
+| Logout | 🔴 Open | SDK logout lifecycle remains to be implemented and validated |
+| Endpoint configuration | 🔴 Open | Explicit environment-safe endpoint configuration remains required |
+| SDK automated tests | 🔴 Missing | No test suite or test script has been verified |
+| Extension end-to-end | 🔴 Not verified | Login, cookie creation, session restore, logout, and repeat login still need E2E validation |
+
+A local type error in `TransactionStorage.get()` was resolved during this session. This is not equivalent to a successful full `npm run typecheck`; the complete check result has not yet been reported.
 
 ## Remaining work — priority order
 
 ### P0 — Close the Extension authentication flow
 
 - [ ] Align SDK /v1/exchange request with the Worker JSON schema, including UUID state.
-- [ ] Add explicit callback state equality validation against the initiated transaction.
+- [x] Implement explicit callback state equality validation in the local working tree; synchronize and test it before treating the item as complete.
 - [ ] Use the transaction's stored redirect URI during exchange.
-- [ ] Ensure transaction cleanup on launcher rejection, OAuth denial, callback parse errors, exchange failure, and success.
+- [ ] Verify transaction cleanup across launcher rejection, OAuth denial, callback parse errors, exchange failure, and success; a local finally-based cleanup path exists, but error masking and all paths still need tests.
 - [ ] Replace the hardcoded localhost base URL with explicit development/production endpoint configuration.
 - [ ] Verify the exact exchange success/error envelope and data.user shape against the Worker response helpers.
 - [ ] Validate HTTP status and response JSON safely, including non-JSON and malformed responses.
@@ -98,7 +99,7 @@ The following status reflects the SDK source inspected on its current default br
 - [ ] Add unit tests for PKCE, state generation/validation, callback parsing, request construction, and response parsing.
 - [ ] Add integration tests against a mocked Auth Worker contract.
 - [ ] Test OAuth denial, missing code/state, state mismatch, expired/reused transaction, exchange failure, network failure, and browser cancellation.
-- [ ] Add typed SDK error codes while preserving underlying causes.
+- [x] Add the internal typed error class/helper in the local working tree; synchronize and test classification and cause preservation before release.
 - [ ] Confirm no token, verifier, or raw session secret is logged or unnecessarily exposed.
 - [ ] Verify cookie attributes, CORS, and credentialed requests from each supported origin.
 
