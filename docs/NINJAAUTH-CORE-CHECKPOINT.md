@@ -1,6 +1,6 @@
 # NinjaAuth — Core Checkpoint 0.1
 
-> **Aggiornato:** 30 ottobre 2026  
+> **Aggiornato:** 1 novembre 2026  
 > Per lo stato operativo completo e le priorità consultare la [roadmap](ROADMAP.md). Questo checkpoint raccoglie le decisioni architetturali e la Definition of Done del Core.
 
 ## 1. Obiettivo
@@ -81,19 +81,21 @@ Restano da analizzare:
 - refresh upstream che restituisce un nuovo token dopo che il logout ha già tentato la revoca del token precedente;
 - ulteriori ordinamenti, timeout e failure path prioritizzati in base al rischio.
 
-## 6. Stato SDK attuale
+## 6. Stato SDK — aggiornamento sessione 1 novembre 2026
 
-Il codice SDK sul branch principale non è ancora allineato al contratto Worker:
+Le note seguenti descrivono il lavoro riferito nel working tree locale. Non attestano che le modifiche siano già presenti sul branch remoto né che siano state validate con una suite completa.
 
-- il client usa ancora un endpoint localhost hardcoded;
-- il code exchange invia form-urlencoded mentre il Worker si aspetta JSON;
-- il client non invia state e il formato generato non corrisponde all'UUID richiesto;
-- il confronto esplicito del callback state è da completare;
-- logout è ancora un TODO;
-- il flusso Web non è implementato;
-- il package non ha ancora una suite test SDK.
+- È stato installato `@types/chrome` come dipendenza di sviluppo.
+- Il problema di tipizzazione in `TransactionStorage.get()` è stato risolto con un'asserzione sul valore restituito da `chrome.storage.session.get()`. L'asserzione non sostituisce una validazione runtime dei dati persistiti.
+- È stata introdotta la classe interna `NinjaAuthInternalError`, con codici tipizzati e conservazione dell'errore originale.
+- È stata introdotta `NinjaAuthErrorException()` per normalizzare gli errori senza esporre i dettagli OAuth, Chrome o Worker all'applicazione integratrice.
+- Il parser del callback classifica callback malformate, diniego OAuth e errori del provider.
+- Il flusso confronta lo state ricevuto con quello originario e rimuove la transazione in un blocco `finally`. Resta da verificare che un errore durante la rimozione non nasconda l'errore principale.
+- Il builder dell'URL di autorizzazione è stato semplificato: restano gli scope `openid` e `offline_access`; sono stati rimossi i default `profile`, `email` e il parametro `resource`.
 
-Questi punti sono ancora aperti: il superamento dei test RT-001/RT-002 riguarda il backend Worker e non li chiude automaticamente.
+**Non ancora verificato/completato:** formato UUID dello state, allineamento JSON di `/v1/exchange`, validazione robusta della risposta, endpoint configurabili, `getSession()`, `logout()`, test automatici SDK e flusso end-to-end completo.
+
+Il prossimo passo operativo concordato è completare `getSession()`: una risposta anonima valida deve restituire una sessione anonima normalizzata; un errore di rete, del Worker o una risposta malformata deve invece causare un rigetto della Promise. `getSession()` non deve avviare login interattivo.
 
 ## 7. Principi da non violare
 
