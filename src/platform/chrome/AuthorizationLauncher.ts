@@ -24,9 +24,9 @@ export class ChromeAuthorizationLauncher
 
             if (!responseUrl) {
                 throw NinjaAuthErrorException(
-                    undefined,
                     "AUTHORIZATION_FAILED",
-                    "Chrome non ha restituito l'indirizzo di risposta."
+                    "Chrome non ha restituito l'indirizzo di risposta.",
+                    error
                 );
             }
 
@@ -35,9 +35,9 @@ export class ChromeAuthorizationLauncher
         } catch (error) {
 
             throw NinjaAuthErrorException(
-                error,
                 "AUTHORIZATION_FAILED",
-                "Non è stato possibile completare l'autorizzazione."
+                "Non è stato possibile completare l'autorizzazione.",
+                error
             );
         }
     }

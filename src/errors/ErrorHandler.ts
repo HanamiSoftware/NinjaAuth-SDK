@@ -8,9 +8,9 @@ import type {
 
 
 export function NinjaAuthErrorException(
-    error: unknown,
     code: InternalErrorCode,
-    message: string
+    message: string,
+    error?: unknown
 ): NinjaAuthInternalError {
 
     // Se l'errore è già stato classificato,
@@ -36,8 +36,8 @@ export function ThrowableError(
 ): never {
 
     throw NinjaAuthErrorException(
-        error,
         code,
-        message
+        message,
+        error
     );
 }

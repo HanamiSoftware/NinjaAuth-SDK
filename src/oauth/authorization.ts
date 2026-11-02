@@ -56,9 +56,9 @@ export function parseAuthorizationCallback(
         url = new URL(responseUrl);
     } catch (error) {
         throw NinjaAuthErrorException(
-            error,
             "INVALID_CALLBACK",
-            "L'indirizzo di risposta dell'autorizzazione non è valido."
+            "L'indirizzo di risposta dell'autorizzazione non è valido.",
+            error
         );
     }
 
@@ -71,14 +71,13 @@ export function parseAuthorizationCallback(
 
         if (error === "access_denied") {
             throw NinjaAuthErrorException(
-                undefined,
                 "OAUTH_DENIED",
-                "L'autorizzazione è stata negata."
+                "L'autorizzazione è stata negata.",
+                error
             );
         }
 
         throw NinjaAuthErrorException(
-            undefined,
             "OAUTH_PROVIDER_ERROR",
             description
                 ? `Il provider di autenticazione ha restituito un errore: ${description}`
@@ -91,17 +90,17 @@ export function parseAuthorizationCallback(
 
     if (!code) {
         throw NinjaAuthErrorException(
-            undefined,
             "INVALID_CALLBACK",
-            "Il codice di autorizzazione non è presente nella risposta."
+            "Il codice di autorizzazione non è presente nella risposta.",
+            error
         );
     }
 
     if (!state) {
         throw NinjaAuthErrorException(
-            undefined,
             "INVALID_CALLBACK",
-            "Lo state non è presente nella risposta di autorizzazione."
+            "Lo state non è presente nella risposta di autorizzazione.",
+            error
         );
     }
 
