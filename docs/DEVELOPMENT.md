@@ -14,13 +14,15 @@ npm install
 npm run build
 npm run dev
 npm run typecheck
+npm test
 ~~~
 
 - build: creates ESM, CJS, declaration files, and an IIFE bundle via tsup.
 - dev: runs tsup in watch mode.
 - typecheck: runs TypeScript without emitting output.
+- test: runs the Node.js built-in test runner against the built ESM bundle. Run the build before the tests.
 
-The inspected SDK package manifest does not define a test script. SDK unit/integration test coverage remains work to do before release readiness.
+The SDK test suite uses mocked Chrome extension APIs and mocked Worker HTTP responses. It verifies the SDK authorization, PKCE/state, exchange, session, logout, cookie-credential, and error-handling behavior. It is not a live end-to-end test against a deployed Worker or OAuth provider.
 
 ## Suggested SDK workflow
 
