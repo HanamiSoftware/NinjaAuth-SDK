@@ -52,6 +52,34 @@ function isNinjaUser(
     );
 }
 
+function isNinjaSessionInfo(
+    value: unknown
+): value is NonNullable<NinjaSession["session"]> {
+    return (
+        isRecord(value) &&
+        typeof value.expiresAt === "string" &&
+        Number.isFinite(Date.parse(value.expiresAt)) &&
+        typeof value.absoluteExpiresAt === "string" &&
+        Number.isFinite(Date.parse(value.absoluteExpiresAt))
+    );
+}
+
+function isNinjaSession(
+    value: unknown
+): value is NinjaSession {
+    if (!isRecord(value) || typeof value.authenticated !== "boolean") {
+        return false;
+    }
+
+    if (value.authenticated) {
+        return (
+            isNinjaUser(value.user) &&
+            isNinjaSessionInfo(value.session)
+        );
+    }
+
+    return value.user === null && value.session === null;
+}
 
 class NinjaAuthClient {
 
@@ -314,32 +342,86 @@ class NinjaAuthClient {
     }
 
 
-    public async getSession(): Promise<NinjaSession> {
+   public async getSession(): Promise<NinjaSession> {
 
     if (!this.ensureInitialized()) {
-        throw new Error(
+        throw NinjaAuthErrorException(
+            "INITIALIZATION_FAILED",
             "NinjaAuth: call init() before getSession()."
         );
     }
 
-    const response = await fetch(
-        getNinjaConnectEndpoints(this.config!.environment ?? "production").session,
-        {
-            method: "GET",
-            credentials: "include"
-        }
-    );
+    let response: Response;
 
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
-        throw new Error(
-            result.message ||
-            "NinjaAuth: failed to retrieve session."
+    try {
+        response = await fetch(
+            getNinjaConnectEndpoints(
+                this.config!.environment ?? "production"
+            ).session,
+            {
+                method: "GET",
+                credentials: "include"
+            }
+        );
+    } catch (error) {
+        throw NinjaAuthErrorException(
+            "NETWORK",
+            "NinjaAuth: unable to retrieve the current session.",
+            error
         );
     }
 
-    return result.data as NinjaSession;
+    let result: unknown;
+
+    try {
+        result = await response.json();
+    } catch (error) {
+        throw NinjaAuthErrorException(
+            "INVALID_RESPONSE",
+            "NinjaAuth: the session service returned an invalid response.",
+            error
+        );
+    }
+
+    if (!isRecord(result)) {
+        throw NinjaAuthErrorException(
+            "INVALID_RESPONSE",
+            "NinjaAuth: the session service returned an invalid response envelope.",
+            result
+        );
+    }
+
+    // Only INVALID_SESSION means anonymous.
+    if (
+        response.status === 401 &&
+        result.success === false &&
+        isRecord(result.error) &&
+        result.error.code === "INVALID_SESSION"
+    ) {
+        return {
+            authenticated: false,
+            user: null,
+            session: null
+        };
+    }
+
+    if (!response.ok || result.success !== true) {
+        throw NinjaAuthErrorException(
+            "SESSION_FAILED",
+            "NinjaAuth: failed to retrieve the current session.",
+            result
+        );
+    }
+
+    if (!isNinjaSession(result.data)) {
+        throw NinjaAuthErrorException(
+            "INVALID_RESPONSE",
+            "NinjaAuth: the session service returned an invalid session payload.",
+            result.data
+        );
+    }
+
+    return result.data;
 }
 }
 
