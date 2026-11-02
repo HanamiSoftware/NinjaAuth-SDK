@@ -2,6 +2,7 @@ export interface NinjaAuthConfig {
     clientId: string;
     redirectUri: string;
     platform: "extension" | "web";
+    environment?: "development" | "production";
 }
 
 export interface NinjaUser {
