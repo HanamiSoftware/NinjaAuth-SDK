@@ -25,8 +25,7 @@ export class ChromeAuthorizationLauncher
             if (!responseUrl) {
                 throw NinjaAuthErrorException(
                     "AUTHORIZATION_FAILED",
-                    "Chrome non ha restituito l'indirizzo di risposta.",
-                    error
+                    "Chrome non ha restituito l'indirizzo di risposta."
                 );
             }
 

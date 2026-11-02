@@ -70,19 +70,20 @@ class NinjaAuthClient {
         ) {
             throw NinjaAuthErrorException(
                 "CONFIGURATION",
-                "NinjaAuth: platform must be 'extension' or 'web'.",
-                error
+                "NinjaAuth: platform must be 'extension' or 'web'."
             );
         }
 
         if (!config.clientId) {
-            throw new Error(
+            throw NinjaAuthErrorException(
+                "CONFIGURATION",
                 "NinjaAuth: clientId is required."
             );
         }
 
         if (!config.redirectUri) {
-            throw new Error(
+            throw NinjaAuthErrorException(
+                "CONFIGURATION",
                 "NinjaAuth: redirectUri is required."
             );
         }
@@ -95,8 +96,7 @@ class NinjaAuthClient {
         ) {
             throw NinjaAuthErrorException(
                 "CONFIGURATION",
-                "NinjaAuth: environment must be 'development' or 'production'.",
-                error
+                "NinjaAuth: environment must be 'development' or 'production'."
             );
         }
 
@@ -112,7 +112,8 @@ class NinjaAuthClient {
     public async login(): Promise<NinjaUser> {
 
         if (!this.ensureInitialized()) {
-            throw new Error(
+            throw NinjaAuthErrorException(
+                "NOT_INITIALIZED",
                 "NinjaAuth: call init() before login()."
             );
         }
@@ -125,8 +126,7 @@ class NinjaAuthClient {
             case "web":
                 throw NinjaAuthErrorException(
                     "UNSUPPORTED_PLATFORM",
-                    "NinjaAuth: the web authentication flow is not implemented yet.",
-                    error
+                    "NinjaAuth: the web authentication flow is not implemented yet."
                 );
         }
     }
@@ -189,9 +189,9 @@ class NinjaAuthClient {
 
             if (!returnedTransaction) {
                 throw NinjaAuthErrorException(
-                    undefined,
                     "TRANSACTION_NOT_FOUND",
-                    "La transazione di autorizzazione non è più disponibile."
+                    "La transazione di autorizzazione non è più disponibile.",
+                    error
                 );
             }
 
@@ -244,9 +244,9 @@ class NinjaAuthClient {
         } catch (error) {
 
             throw NinjaAuthErrorException(
-                error,
                 "NETWORK",
-                "Impossibile raggiungere il servizio di autenticazione. Verifica la connessione e riprova."
+                "Impossibile raggiungere il servizio di autenticazione. Verifica la connessione e riprova.",
+                error
             );
         }
 
@@ -270,9 +270,9 @@ class NinjaAuthClient {
         if (!isRecord(result)) {
 
             throw NinjaAuthErrorException(
-                result,
                 "INVALID_RESPONSE",
-                "Il formato della risposta del servizio di autenticazione non è valido."
+                "Il formato della risposta del servizio di autenticazione non è valido.",
+                result
             );
         }
 
@@ -280,9 +280,9 @@ class NinjaAuthClient {
         if (!response.ok || result.success !== true) {
 
             throw NinjaAuthErrorException(
-                result,
                 "EXCHANGE_FAILED",
-                "Non è stato possibile completare l'autenticazione. Riprova."
+                "Non è stato possibile completare l'autenticazione. Riprova.",
+                result
             );
         }
 
@@ -293,9 +293,9 @@ class NinjaAuthClient {
         ) {
 
             throw NinjaAuthErrorException(
-                result.data,
                 "INVALID_RESPONSE",
-                "Il servizio di autenticazione non ha restituito un profilo utente valido."
+                "Il servizio di autenticazione non ha restituito un profilo utente valido.",
+                result.data
             );
         }
 
