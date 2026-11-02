@@ -44,6 +44,19 @@ The experimental /v1/state registration endpoint is not a required SDK step. The
 - The Worker stores a hash of the session secret and encrypts the upstream refresh token at rest.
 - The session has a normal expiry and an absolute expiry; refresh must not extend the absolute expiry.
 
+## Session observation semantics — `getSession()`
+
+`getSession()` observes the current Ninja Connect session and returns its normalized authentication state. It does not start the interactive authorization flow; that is the responsibility of `login()`.
+
+The SDK distinguishes an unauthenticated state from a failure to determine the session:
+
+- A successful `200` response with `data.authenticated === false` is a normal unauthenticated result.
+- A `401` response is mapped to an unauthenticated result **only** when the response envelope explicitly contains `error.code === "INVALID_SESSION"`.
+- Other `401` responses, including `USER_NOT_FOUND`, are not silently converted into an unauthenticated result; they remain errors.
+- Network failures, malformed JSON or payloads, server errors, and temporary session/refresh failures remain errors. They must not be represented as an unauthenticated session.
+
+This distinction lets the consuming application react correctly: an unauthenticated result is a known authentication state, while an error means the SDK could not reliably determine that state. The SDK does not decide what an application should display or permit in either case.
+
 ## Logout semantics
 
 ### Current-session logout — `POST /v1/logout`
