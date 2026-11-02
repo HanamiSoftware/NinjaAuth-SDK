@@ -355,3 +355,86 @@ test("login maps an OAuth access_denied callback to OAUTH_DENIED", async () => {
     );
     assert.equal(chromeMock.transactions.size, 0);
 });
+
+
+test("getSession accepts the Worker 200 anonymous-session payload", async () => {
+    initialize();
+
+    globalThis.fetch = async () => response({
+        success: true,
+        data: {
+            authenticated: false,
+            user: null,
+            session: null
+        }
+    });
+
+    assert.deepEqual(
+        await NinjaAuth.getSession(),
+        {
+            authenticated: false,
+            user: null,
+            session: null
+        }
+    );
+});
+
+test("getSession rejects non-JSON responses", async () => {
+    initialize();
+
+    globalThis.fetch = async () => new Response("not-json", {
+        status: 200
+    });
+
+    await assert.rejects(
+        NinjaAuth.getSession(),
+        (error) => error.code === "INVALID_RESPONSE"
+    );
+});
+
+test("getSession rejects malformed authenticated session data", async () => {
+    initialize();
+
+    globalThis.fetch = async () => response({
+        success: true,
+        data: {
+            authenticated: true,
+            user: USER,
+            session: { expiresAt: "not-a-date" }
+        }
+    });
+
+    await assert.rejects(
+        NinjaAuth.getSession(),
+        (error) => error.code === "INVALID_RESPONSE"
+    );
+});
+
+test("logout rejects a success envelope without loggedOut confirmation", async () => {
+    initialize();
+
+    globalThis.fetch = async () => response({
+        success: true,
+        data: { loggedOut: false }
+    });
+
+    await assert.rejects(
+        NinjaAuth.logout(),
+        (error) => error.code === "INVALID_RESPONSE"
+    );
+});
+
+test("login rejects a failed exchange and still clears the transaction", async () => {
+    initialize();
+
+    globalThis.fetch = async () => response({
+        success: false,
+        error: { code: "INVALID_GRANT" }
+    }, 400);
+
+    await assert.rejects(
+        NinjaAuth.login(),
+        (error) => error.code === "EXCHANGE_FAILED"
+    );
+    assert.equal(chromeMock.transactions.size, 0);
+});
