@@ -18,10 +18,12 @@ import type { AuthorizationLauncher } from "./oauth/authorization";
 import { ChromeOAuthTransactionStorage } from "./platform/chrome/TransactionStorage";
 import { ChromeAuthorizationLauncher } from "./platform/chrome/AuthorizationLauncher";
 import { NinjaAuthErrorException } from "./errors/ErrorHandler";
+import {
+    getNinjaConnectEndpoints
+} from "./config";
 
 
 const VERSION = "0.1.0";
-const BASE_URL = "http://127.0.0.1:8787/v1";
 
 
 function isRecord(
@@ -74,10 +76,24 @@ class NinjaAuthClient {
             );
         }
 
+        const environment = config.environment ?? "production";
+
+        if (
+            environment !== "development" &&
+            environment !== "production"
+        ) {
+            throw NinjaAuthErrorException(
+                undefined,
+                "CONFIGURATION",
+                "NinjaAuth: environment must be 'development' or 'production'."
+            );
+        }
+
         this.config = {
             clientId: config.clientId,
             redirectUri: config.redirectUri,
-            platform: supportedPlatforms
+            platform: supportedPlatforms,
+            environment
         };
     }
 
@@ -96,13 +112,12 @@ class NinjaAuthClient {
                 return this.createAuthFlow(new ChromeOAuthTransactionStorage, new ChromeAuthorizationLauncher, verifier, challenge, state);
 
             case "web":
-                // Handle web-specific authentication flow
-                break;
+                throw NinjaAuthErrorException(
+                    undefined,
+                    "UNSUPPORTED_PLATFORM",
+                    "NinjaAuth: the web authentication flow is not implemented yet."
+                );
         }
-            
-        
-       
-        return new Promise<NinjaUser>((resolve, reject) => { })
     }
 
 
@@ -154,7 +169,7 @@ class NinjaAuthClient {
                 throw NinjaAuthErrorException(
                     undefined,
                     "STATE_MISMATCH",
-                    "La verifica di sicurezza dell'autorizzazione non è riuscita."
+                    "La verifica di sicurezza dell'autorizzazione non Ã¨ riuscita."
                 );
             }
 
@@ -165,7 +180,7 @@ class NinjaAuthClient {
                 throw NinjaAuthErrorException(
                     undefined,
                     "TRANSACTION_NOT_FOUND",
-                    "La transazione di autorizzazione non è più disponibile."
+                    "La transazione di autorizzazione non Ã¨ piÃ¹ disponibile."
                 );
             }
 
@@ -198,7 +213,7 @@ class NinjaAuthClient {
         try {
 
             response = await fetch(
-                `${BASE_URL}/exchange`,
+                getNinjaConnectEndpoints(this.config!.environment ?? "production").exchange,
                 {
                     method: "POST",
                     credentials: "include",
@@ -246,7 +261,7 @@ class NinjaAuthClient {
             throw NinjaAuthErrorException(
                 result,
                 "INVALID_RESPONSE",
-                "Il formato della risposta del servizio di autenticazione non è valido."
+                "Il formato della risposta del servizio di autenticazione non Ã¨ valido."
             );
         }
 
@@ -256,7 +271,7 @@ class NinjaAuthClient {
             throw NinjaAuthErrorException(
                 result,
                 "EXCHANGE_FAILED",
-                "Non è stato possibile completare l'autenticazione. Riprova."
+                "Non Ã¨ stato possibile completare l'autenticazione. Riprova."
             );
         }
 
@@ -293,7 +308,7 @@ class NinjaAuthClient {
     }
 
     const response = await fetch(
-        `${BASE_URL}/session`,
+        getNinjaConnectEndpoints(this.config!.environment ?? "production").session,
         {
             method: "GET",
             credentials: "include"
