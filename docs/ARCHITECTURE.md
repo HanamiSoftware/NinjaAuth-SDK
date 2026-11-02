@@ -94,6 +94,12 @@ The exact exchange contract must be aligned before this flow is considered compl
 
 ## Session architecture
 
+### Observing the current session
+
+`getSession()` allows a consuming application to obtain information about the current authentication session and react to that state. Unlike `login()`, which explicitly starts the authentication flow, `getSession()` only observes and returns the state of the existing session; it does not initiate an interactive login.
+
+The SDK reports authentication state, not application policy. A non-authenticated result means that no valid authenticated Ninja Connect session is available. The consuming application decides how that state affects its own user experience and access rules.
+
 The browser holds an opaque HttpOnly session cookie. SDK JavaScript must not read or persist the raw session secret.
 
 At a high level, the Worker generates a cryptographically random session secret, stores only its hash in the database, stores the upstream refresh token encrypted at rest, resolves the cookie to an active database session, refreshes upstream credentials server-side when required, and revokes the local session during logout while attempting upstream token revocation.
