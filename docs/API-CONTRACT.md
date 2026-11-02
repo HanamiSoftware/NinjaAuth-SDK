@@ -32,7 +32,7 @@ API endpoints are environment-aware: `development` uses the local Wrangler endpo
 - Remove transaction data on success, OAuth denial, cancellation, parse errors, and network failures.
 - Keep the PKCE verifier short-lived and do not log it.
 
-The experimental /v1/state registration endpoint is not a required SDK step. The SDK stores its transaction locally and sends required state with the code exchange. Do not revive the endpoint as a dependency simply to work around the SDK/Worker exchange mismatch.
+The experimental /v1/state registration endpoint is not a required SDK step. The SDK stores its transaction locally and sends the required state with the code exchange. Do not revive the endpoint as a dependency; it is outside the intended SDK flow.
 
 ## Session and cookie requirements
 
