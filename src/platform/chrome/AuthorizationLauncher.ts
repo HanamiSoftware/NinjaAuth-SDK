@@ -1,43 +1,44 @@
-import type { AuthorizationLauncher } from "../../oauth/authorization";
+
+import type {
+    AuthorizationLauncher
+} from "../../oauth/authorization";
+
+import {
+    NinjaAuthErrorException
+} from "../../errors/ErrorHandler";
+
 
 export class ChromeAuthorizationLauncher
     implements AuthorizationLauncher {
 
-    public launchAuthorization(url: string): Promise<string> {
-        return new Promise((resolve, reject) => {
+    public async launchAuthorization(
+        url: string
+    ): Promise<string> {
 
-            chrome.identity.launchWebAuthFlow(
-                {
+        try {
+            const responseUrl =
+                await chrome.identity.launchWebAuthFlow({
                     url,
                     interactive: true
-                },
-                (responseUrl) => {
+                });
 
-                    const error =
-                        chrome.runtime.lastError;
+            if (!responseUrl) {
+                throw NinjaAuthErrorException(
+                    undefined,
+                    "AUTHORIZATION_FAILED",
+                    "Chrome non ha restituito l'indirizzo di risposta."
+                );
+            }
 
-                    if (error) {
-                        reject(
-                            new Error(
-                                error.message ||
-                                "NinjaAuth: authorization failed."
-                            )
-                        );
-                        return;
-                    }
+            return responseUrl;
 
-                    if (!responseUrl) {
-                        reject(
-                            new Error(
-                                "NinjaAuth: authorization failed: no callback URL."
-                            )
-                        );
-                        return;
-                    }
+        } catch (error) {
 
-                    resolve(responseUrl);
-                }
+            throw NinjaAuthErrorException(
+                error,
+                "AUTHORIZATION_FAILED",
+                "Non è stato possibile completare l'autorizzazione."
             );
-        });
+        }
     }
 }

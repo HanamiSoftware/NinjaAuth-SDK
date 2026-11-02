@@ -27,7 +27,7 @@ export class ChromeOAuthTransactionStorage
         const result =
             await chrome.storage.session.get(key);
 
-        return result[key] ?? null;
+        return (result[key] as OAuthTransaction) ?? null;
     }
 
     async remove(
