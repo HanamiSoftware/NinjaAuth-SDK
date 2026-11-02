@@ -113,7 +113,7 @@ class NinjaAuthClient {
 
         if (!this.ensureInitialized()) {
             throw NinjaAuthErrorException(
-                "NOT_INITIALIZED",
+                "INITIALIZATION_FAILED",
                 "NinjaAuth: call init() before login()."
             );
         }
@@ -129,6 +129,12 @@ class NinjaAuthClient {
                     "NinjaAuth: the web authentication flow is not implemented yet."
                 );
         }
+        return Promise.reject(
+            NinjaAuthErrorException(
+                "UNSUPPORTED_PLATFORM",
+                "NinjaAuth: the web authentication flow is not implemented yet."
+            )
+        );
     }
 
 
@@ -179,8 +185,7 @@ class NinjaAuthClient {
             if (callback.state !== state) {
                 throw NinjaAuthErrorException(
                     "STATE_MISMATCH",
-                    "La verifica di sicurezza dell'autorizzazione non è riuscita.",
-                    error
+                    "La verifica di sicurezza dell'autorizzazione non è riuscita."
                 );
             }
 
@@ -190,8 +195,7 @@ class NinjaAuthClient {
             if (!returnedTransaction) {
                 throw NinjaAuthErrorException(
                     "TRANSACTION_NOT_FOUND",
-                    "La transazione di autorizzazione non è più disponibile.",
-                    error
+                    "La transazione di autorizzazione non è più disponibile."
                 );
             }
 
@@ -260,9 +264,9 @@ class NinjaAuthClient {
         } catch (error) {
 
             throw NinjaAuthErrorException(
-                error,
                 "INVALID_RESPONSE",
-                "Il servizio di autenticazione ha restituito una risposta non valida."
+                "Il servizio di autenticazione ha restituito una risposta non valida.",
+                error
             );
         }
 

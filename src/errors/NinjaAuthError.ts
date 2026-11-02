@@ -1,5 +1,6 @@
 export type InternalErrorCode =
     | "INITIALIZATION"
+    | "INITIALIZATION_FAILED"
     | "CONFIGURATION"
     | "UNSUPPORTED_PLATFORM"
     | "AUTHORIZATION_CANCELLED"
