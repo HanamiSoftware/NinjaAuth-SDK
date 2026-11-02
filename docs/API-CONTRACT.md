@@ -8,23 +8,21 @@ Worker source currently resides in [NinjaURL — Workers/auth-worker](https://gi
 
 | Method | Path | Purpose | SDK status in inspected source |
 |---|---|---|---|
-| POST | /v1/exchange | Exchange authorization code and create application session | SDK request currently mismatches Worker schema |
-| GET | /v1/session | Resolve current Ninja Connect session; may refresh server-side | SDK calls it; runtime response validation needs strengthening |
+| POST | /v1/exchange | Exchange authorization code and create application session | SDK sends the Worker JSON schema and validates `data.user` |
+| GET | /v1/session | Resolve current Ninja Connect session; may refresh server-side | SDK validates the response envelope and normalized `NinjaSession` payload |
 | GET | /v1/user/me | Return the current authenticated user | Worker route exists; public SDK method/contract mapping remains to finalize |
-| POST | /v1/logout | Revoke only the session identified by the current `ninja_session` cookie; attempt upstream refresh-token revocation; clear current cookie | Worker route exists; SDK method is incomplete/TODO |
+| POST | /v1/logout | Revoke only the session identified by the current `ninja_session` cookie; attempt upstream refresh-token revocation; clear current cookie | SDK implements current-session logout and requires explicit server confirmation |
 | POST (proposed; not implemented) | /v1/logout/all | Revoke all active Ninja Connect sessions belonging to the authenticated user | Architecture proposal only; not an available route or SDK method |
 
 The experimental POST /v1/state route is not part of the intended SDK flow. It may be removed; the SDK must not depend on it unless the architecture is deliberately revised.
 
-## Exchange request — mismatch to close
+## Exchange request — implemented SDK contract
 
-The inspected SDK currently sends application/x-www-form-urlencoded with grant_type, code, redirect_uri, client_id, and code_verifier.
+The SDK sends a JSON body containing `state` (UUID), `code`, `client_id`, `code_verifier`, and `redirect_uri`, matching the reviewed Worker request schema. The SDK validates the success envelope and the returned `data.user` before resolving `login()` with a `NinjaUser`.
 
-The reviewed Worker contract expects a JSON body containing state (UUID), code, client_id, code_verifier, and redirect_uri.
+The SDK uses PKCE with `S256` and validates the callback state against the state generated for the initiating transaction before attempting the exchange.
 
-Therefore, the current SDK request is not aligned: it uses a different content type, omits state, and its state generator emits hexadecimal text rather than a UUID. The client must be updated to match the agreed Worker schema, or the server schema must be changed deliberately and consistently.
-
-The SDK currently hardcodes http://127.0.0.1:8787/v1 in src/NinjaAuth.ts; endpoint/environment configuration must be explicit and production-safe.
+API endpoints are environment-aware: `development` uses the local Wrangler endpoint `http://127.0.0.1:8787/v1`; `production` uses `https://auth.ninjaconnect.io/v1`. The default environment is `production`. The OAuth authorization endpoint remains `https://auth.ninjaconnect.io`.
 
 ## OAuth state and transaction handling
 
@@ -50,7 +48,7 @@ The experimental /v1/state registration endpoint is not a required SDK step. The
 
 ### Current-session logout — `POST /v1/logout`
 
-The reviewed Worker implementation is **session-specific**, not global. It identifies the session using the `ninja_session` cookie on the current request, revokes only that `auth_sessions` row, attempts to revoke that row's encrypted upstream refresh token, and clears the cookie in the current browser response. Other active sessions belonging to the same user remain independent.
+The reviewed Worker implementation is **session-specific**, not global. It identifies the session using the `ninja_session` cookie on the current request, revokes only that `auth_sessions` row, attempts to revoke that row's encrypted upstream refresh token, and clears the cookie in the current browser response. Other active sessions belonging to the same user remain independent. The SDK calls this route with `POST` and `credentials: "include"`, and resolves `logout()` only when the HTTP response and success envelope confirm `data.loggedOut === true`.
 
 **Known implementation issue:** the reviewed handler does not check `response.ok` after the upstream `/oauth2/revoke` fetch. HTTP 4xx/5xx responses do not necessarily throw, so the route may report success even when the provider rejected revocation. Local revocation must remain authoritative, while the upstream outcome should be observed and represented accurately.
 
