@@ -62,7 +62,18 @@ class NinjaAuthClient {
 
     public init(config: NinjaAuthConfig): void {
 
-        const supportedPlatforms = config?.platform ?? "web";
+        const supportedPlatforms = config?.platform ?? "extension";
+
+        if (
+            supportedPlatforms !== "extension" &&
+            supportedPlatforms !== "web"
+        ) {
+            throw NinjaAuthErrorException(
+                undefined,
+                "CONFIGURATION",
+                "NinjaAuth: platform must be 'extension' or 'web'."
+            );
+        }
 
         if (!config.clientId) {
             throw new Error(
