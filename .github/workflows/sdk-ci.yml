@@ -2,9 +2,6 @@ name: SDK CI
 
 on:
   push:
-    branches:
-      - dev
-      - master
     paths:
       - "src/**"
       - "package.json"
