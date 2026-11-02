@@ -338,7 +338,74 @@ class NinjaAuthClient {
 
     public async logout(): Promise<void> {
 
-        // TODO
+        if (!this.ensureInitialized()) {
+            throw NinjaAuthErrorException(
+                "INITIALIZATION_FAILED",
+                "NinjaAuth: call init() before logout()."
+            );
+        }
+
+        let response: Response;
+
+        try {
+            response = await fetch(
+                getNinjaConnectEndpoints(
+                    this.config!.environment ?? "production"
+                ).logout,
+                {
+                    method: "POST",
+                    credentials: "include"
+                }
+            );
+        } catch (error) {
+            throw NinjaAuthErrorException(
+                "NETWORK",
+                "NinjaAuth: unable to complete logout.",
+                error
+            );
+        }
+
+        let result: unknown;
+
+        try {
+            result = await response.json();
+        } catch (error) {
+            throw NinjaAuthErrorException(
+                "INVALID_RESPONSE",
+                "NinjaAuth: the logout service returned an invalid response.",
+                error
+            );
+        }
+
+        if (!isRecord(result)) {
+            throw NinjaAuthErrorException(
+                "INVALID_RESPONSE",
+                "NinjaAuth: the logout service returned an invalid response envelope.",
+                result
+            );
+        }
+
+        if (
+            !response.ok ||
+            result.success !== true
+        ) {
+            throw NinjaAuthErrorException(
+                "LOGOUT_FAILED",
+                "NinjaAuth: the server could not confirm logout.",
+                result
+            );
+        }
+
+        if (
+            !isRecord(result.data) ||
+            result.data.loggedOut !== true
+        ) {
+            throw NinjaAuthErrorException(
+                "INVALID_RESPONSE",
+                "NinjaAuth: the logout service returned an invalid confirmation.",
+                result.data
+            );
+        }
     }
 
 
