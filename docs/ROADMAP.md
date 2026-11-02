@@ -21,6 +21,7 @@ The backend test results below are branch-only evidence. They have not been merg
 - No Worker repository transfer, merge, or deployment is included in the completed test work.
 - AuthGear is the current upstream identity provider, not the owner of Ninja Connect application sessions. AuthGear SSO sessions and Ninja Connect `auth_sessions` records are separate lifecycles.
 - The public NinjaAuth API must remain provider-neutral. AuthGear-specific endpoints, credentials, refresh tokens, and provider secrets remain behind Ninja Connect; OIDC Discovery/interoperability is a planned capability.
+- `login()` starts the interactive authentication flow; `getSession()` observes and returns the current session state without starting login. Only an explicit `401 INVALID_SESSION` is normalized to unauthenticated; other authorization errors and temporary failures remain errors.
 
 ## Completed and verified work
 
