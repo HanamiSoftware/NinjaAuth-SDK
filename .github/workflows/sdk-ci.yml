@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - "src/**"
+      - "test/**"
+      - ".github/workflows/sdk-ci.yml"
       - "package.json"
       - "package-lock.json"
       - "tsconfig.json"
@@ -18,7 +20,7 @@ concurrency:
 
 jobs:
   validate:
-    name: Typecheck and build
+    name: Typecheck, build and test
     runs-on: ubuntu-latest
 
     steps:
@@ -39,3 +41,6 @@ jobs:
 
       - name: Build SDK
         run: npm run build
+
+      - name: Run SDK tests
+        run: npm test
