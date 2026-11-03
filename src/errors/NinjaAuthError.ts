@@ -11,6 +11,7 @@ export type InternalErrorCode =
     | "STATE_MISMATCH"
     | "TRANSACTION_NOT_FOUND"
     | "TRANSACTION_EXPIRED"
+    | "TRANSACTION_CLEANUP_FAILED"
     | "NETWORK"
     | "EXCHANGE_FAILED"
     | "SESSION_FAILED"

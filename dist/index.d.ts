@@ -1,7 +1,8 @@
 interface NinjaAuthConfig {
     clientId: string;
     redirectUri: string;
-    platform: "extension" | "web";
+    platform?: "extension" | "web";
+    environment?: "development" | "production";
 }
 interface NinjaUser {
     id: string;
