@@ -1,9 +1,51 @@
 // src/config.ts
 var NINJA_CONNECT = {
   AUTHORIZATION_ENDPOINT: "https://auth.ninjaconnect.io",
-  EXCHANGE_ENDPOINT: "https://auth.ninjaconnect.io/v1/exchange",
+  API_BASE_URLS: {
+    development: "http://127.0.0.1:8787/v1",
+    production: "https://auth.ninjaconnect.io/v1"
+  },
+  API_PATHS: {
+    EXCHANGE: "/exchange",
+    SESSION: "/session",
+    LOGOUT: "/logout"
+  },
   DEFAULT_SCOPE: "openid profile email offline_access"
 };
+function getNinjaConnectEndpoints(environment) {
+  const baseUrl = NINJA_CONNECT.API_BASE_URLS[environment];
+  return {
+    exchange: `${baseUrl}${NINJA_CONNECT.API_PATHS.EXCHANGE}`,
+    session: `${baseUrl}${NINJA_CONNECT.API_PATHS.SESSION}`,
+    logout: `${baseUrl}${NINJA_CONNECT.API_PATHS.LOGOUT}`
+  };
+}
+
+// src/errors/NinjaAuthError.ts
+var NinjaAuthInternalError = class _NinjaAuthInternalError extends Error {
+  constructor(code, message, originalError) {
+    super(message);
+    this.name = "NinjaAuthInternalError";
+    this.code = code;
+    this.originalError = originalError;
+    Object.setPrototypeOf(
+      this,
+      _NinjaAuthInternalError.prototype
+    );
+  }
+};
+
+// src/errors/ErrorHandler.ts
+function NinjaAuthErrorException(code, message, error) {
+  if (error instanceof NinjaAuthInternalError) {
+    return error;
+  }
+  return new NinjaAuthInternalError(
+    code,
+    message,
+    error
+  );
+}
 
 // src/oauth/authorization.ts
 function buildAuthorizationUrl(request) {
@@ -27,24 +69,45 @@ function buildAuthorizationUrl(request) {
   return url;
 }
 function parseAuthorizationCallback(responseUrl) {
-  const url = new URL(responseUrl);
+  let url;
+  try {
+    url = new URL(responseUrl);
+  } catch (error2) {
+    throw NinjaAuthErrorException(
+      "INVALID_CALLBACK",
+      "L'indirizzo di risposta dell'autorizzazione non \uFFFD valido.",
+      error2
+    );
+  }
   const error = url.searchParams.get("error");
   if (error) {
     const description = url.searchParams.get("error_description");
-    throw new Error(
-      description ? `NinjaAuth: ${error}: ${description}` : `NinjaAuth: ${error}`
+    if (error === "access_denied") {
+      throw NinjaAuthErrorException(
+        "OAUTH_DENIED",
+        "L'autorizzazione \uFFFD stata negata.",
+        error
+      );
+    }
+    throw NinjaAuthErrorException(
+      "OAUTH_PROVIDER_ERROR",
+      description ? `Il provider di autenticazione ha restituito un errore: ${description}` : `Il provider di autenticazione ha restituito un errore: ${error}`
     );
   }
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   if (!code) {
-    throw new Error(
-      "NinjaAuth: authorization code is missing."
+    throw NinjaAuthErrorException(
+      "INVALID_CALLBACK",
+      "Il codice di autorizzazione non \uFFFD presente nella risposta.",
+      error
     );
   }
   if (!state) {
-    throw new Error(
-      "NinjaAuth: authorization state is missing."
+    throw NinjaAuthErrorException(
+      "INVALID_CALLBACK",
+      "Lo state non \uFFFD presente nella risposta di autorizzazione.",
+      error
     );
   }
   return {
@@ -54,8 +117,8 @@ function parseAuthorizationCallback(responseUrl) {
 }
 
 // src/oauth/state.ts
-function generateState(length = 32) {
-  return Array.from(crypto.getRandomValues(new Uint8Array(length))).map((b) => b.toString(16).padStart(2, "0")).join("");
+function generateState() {
+  return crypto.randomUUID();
 }
 
 // src/utils/pkce.ts
@@ -101,67 +164,92 @@ var ChromeOAuthTransactionStorage = class {
 
 // src/platform/chrome/AuthorizationLauncher.ts
 var ChromeAuthorizationLauncher = class {
-  launchAuthorization(url) {
-    return new Promise((resolve, reject) => {
-      chrome.identity.launchWebAuthFlow(
-        {
-          url,
-          interactive: true
-        },
-        (responseUrl) => {
-          const error = chrome.runtime.lastError;
-          if (error) {
-            reject(
-              new Error(
-                error.message || "NinjaAuth: authorization failed."
-              )
-            );
-            return;
-          }
-          if (!responseUrl) {
-            reject(
-              new Error(
-                "NinjaAuth: authorization failed: no callback URL."
-              )
-            );
-            return;
-          }
-          resolve(responseUrl);
-        }
+  async launchAuthorization(url) {
+    try {
+      const responseUrl = await chrome.identity.launchWebAuthFlow({
+        url,
+        interactive: true
+      });
+      if (!responseUrl) {
+        throw NinjaAuthErrorException(
+          "AUTHORIZATION_FAILED",
+          "Chrome non ha restituito l'indirizzo di risposta."
+        );
+      }
+      return responseUrl;
+    } catch (error) {
+      throw NinjaAuthErrorException(
+        "AUTHORIZATION_FAILED",
+        "Non \uFFFD stato possibile completare l'autorizzazione.",
+        error
       );
-    });
+    }
   }
 };
 
 // src/NinjaAuth.ts
 var VERSION = "0.1.0";
-var BASE_URL = "http://127.0.0.1:8787/v1";
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isNinjaUser(value) {
+  return isRecord(value) && typeof value.id === "string" && (typeof value.email === "string" || value.email === null) && (typeof value.name === "string" || value.name === null) && (typeof value.pictureUrl === "string" || value.pictureUrl === null);
+}
+function isNinjaSessionInfo(value) {
+  return isRecord(value) && typeof value.expiresAt === "string" && Number.isFinite(Date.parse(value.expiresAt)) && typeof value.absoluteExpiresAt === "string" && Number.isFinite(Date.parse(value.absoluteExpiresAt));
+}
+function isNinjaSession(value) {
+  if (!isRecord(value) || typeof value.authenticated !== "boolean") {
+    return false;
+  }
+  if (value.authenticated) {
+    return isNinjaUser(value.user) && isNinjaSessionInfo(value.session);
+  }
+  return value.user === null && value.session === null;
+}
 var NinjaAuthClient = class {
   constructor() {
     this.config = null;
     this.version = VERSION;
   }
   init(config) {
-    const supportedPlatforms = config?.platform ?? "web";
+    const supportedPlatforms = config?.platform ?? "extension";
+    if (supportedPlatforms !== "extension" && supportedPlatforms !== "web") {
+      throw NinjaAuthErrorException(
+        "CONFIGURATION",
+        "NinjaAuth: platform must be 'extension' or 'web'."
+      );
+    }
     if (!config.clientId) {
-      throw new Error(
+      throw NinjaAuthErrorException(
+        "CONFIGURATION",
         "NinjaAuth: clientId is required."
       );
     }
     if (!config.redirectUri) {
-      throw new Error(
+      throw NinjaAuthErrorException(
+        "CONFIGURATION",
         "NinjaAuth: redirectUri is required."
+      );
+    }
+    const environment = config.environment ?? "production";
+    if (environment !== "development" && environment !== "production") {
+      throw NinjaAuthErrorException(
+        "CONFIGURATION",
+        "NinjaAuth: environment must be 'development' or 'production'."
       );
     }
     this.config = {
       clientId: config.clientId,
       redirectUri: config.redirectUri,
-      platform: supportedPlatforms
+      platform: supportedPlatforms,
+      environment
     };
   }
   async login() {
     if (!this.ensureInitialized()) {
-      throw new Error(
+      throw NinjaAuthErrorException(
+        "INITIALIZATION_FAILED",
         "NinjaAuth: call init() before login()."
       );
     }
@@ -171,10 +259,17 @@ var NinjaAuthClient = class {
       case "extension":
         return this.createAuthFlow(new ChromeOAuthTransactionStorage(), new ChromeAuthorizationLauncher(), verifier, challenge, state);
       case "web":
-        break;
+        throw NinjaAuthErrorException(
+          "UNSUPPORTED_PLATFORM",
+          "NinjaAuth: the web authentication flow is not implemented yet."
+        );
     }
-    return new Promise((resolve, reject) => {
-    });
+    return Promise.reject(
+      NinjaAuthErrorException(
+        "UNSUPPORTED_PLATFORM",
+        "NinjaAuth: the web authentication flow is not implemented yet."
+      )
+    );
   }
   ensureInitialized() {
     if (!this.config) {
@@ -188,7 +283,7 @@ var NinjaAuthClient = class {
       redirectUri: this.config.redirectUri,
       codeChallenge: challenge,
       state,
-      scope: "openid profile email offline_access"
+      scope: "openid offline_access"
     });
     const transaction = {
       verifier,
@@ -196,66 +291,226 @@ var NinjaAuthClient = class {
       createdAt: Date.now()
     };
     await storage.save(state, transaction);
-    const responseUrl = await authorize.launchAuthorization(authorizationUrl.toString());
-    const callback = parseAuthorizationCallback(responseUrl);
-    const returnedTransaction = await storage.get(callback.state);
-    if (!returnedTransaction) {
-      await storage.remove(callback.state);
-      throw new Error(
-        "NinjaAuth: no transaction found for state."
-      );
-    }
+    let hasPrimaryError = false;
     try {
-      const user = await this.exchangeCodeForToken(callback.code, returnedTransaction.verifier);
-      return user;
+      const responseUrl = await authorize.launchAuthorization(
+        authorizationUrl.toString()
+      );
+      const callback = parseAuthorizationCallback(responseUrl);
+      if (callback.state !== state) {
+        throw NinjaAuthErrorException(
+          "STATE_MISMATCH",
+          "La verifica di sicurezza dell'autorizzazione non \xE8 riuscita."
+        );
+      }
+      const returnedTransaction = await storage.get(state);
+      if (!returnedTransaction) {
+        throw NinjaAuthErrorException(
+          "TRANSACTION_NOT_FOUND",
+          "La transazione di autorizzazione non \xE8 pi\xF9 disponibile."
+        );
+      }
+      return await this.exchangeCodeForToken(
+        callback.code,
+        returnedTransaction.verifier,
+        state,
+        returnedTransaction.redirectUri
+      );
+    } catch (error) {
+      hasPrimaryError = true;
+      throw error;
     } finally {
-      await storage.remove(callback.state);
+      try {
+        await storage.remove(state);
+      } catch (cleanupError) {
+        if (!hasPrimaryError) {
+          throw NinjaAuthErrorException(
+            "TRANSACTION_CLEANUP_FAILED",
+            "Non \xE8 stato possibile eliminare la transazione OAuth.",
+            cleanupError
+          );
+        }
+      }
     }
   }
-  async exchangeCodeForToken(code, verifier) {
-    const response = await fetch(
-      `${BASE_URL}/exchange`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: new URLSearchParams({
-          grant_type: "authorization_code",
-          code,
-          redirect_uri: this.config.redirectUri,
-          client_id: this.config.clientId,
-          code_verifier: verifier
-        })
-      }
-    );
-    const result = await response.json();
-    if (!response.ok || !result.success) {
-      throw new Error(
-        result.message || "NinjaAuth: authentication exchange failed."
+  async exchangeCodeForToken(code, verifier, state, redirectUri) {
+    let response;
+    try {
+      response = await fetch(
+        getNinjaConnectEndpoints(this.config.environment ?? "production").exchange,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            state,
+            code,
+            client_id: this.config.clientId,
+            code_verifier: verifier,
+            redirect_uri: redirectUri
+          })
+        }
+      );
+    } catch (error) {
+      throw NinjaAuthErrorException(
+        "NETWORK",
+        "Impossibile raggiungere il servizio di autenticazione. Verifica la connessione e riprova.",
+        error
+      );
+    }
+    let result;
+    try {
+      result = await response.json();
+    } catch (error) {
+      throw NinjaAuthErrorException(
+        "INVALID_RESPONSE",
+        "Il servizio di autenticazione ha restituito una risposta non valida.",
+        error
+      );
+    }
+    if (!isRecord(result)) {
+      throw NinjaAuthErrorException(
+        "INVALID_RESPONSE",
+        "Il formato della risposta del servizio di autenticazione non \xE8 valido.",
+        result
+      );
+    }
+    if (!response.ok || result.success !== true) {
+      throw NinjaAuthErrorException(
+        "EXCHANGE_FAILED",
+        "Non \xE8 stato possibile completare l'autenticazione. Riprova.",
+        result
+      );
+    }
+    if (!isRecord(result.data) || !isNinjaUser(result.data.user)) {
+      throw NinjaAuthErrorException(
+        "INVALID_RESPONSE",
+        "Il servizio di autenticazione non ha restituito un profilo utente valido.",
+        result.data
       );
     }
     return result.data.user;
   }
   async logout() {
+    if (!this.ensureInitialized()) {
+      throw NinjaAuthErrorException(
+        "INITIALIZATION_FAILED",
+        "NinjaAuth: call init() before logout()."
+      );
+    }
+    let response;
+    try {
+      response = await fetch(
+        getNinjaConnectEndpoints(
+          this.config.environment ?? "production"
+        ).logout,
+        {
+          method: "POST",
+          credentials: "include"
+        }
+      );
+    } catch (error) {
+      throw NinjaAuthErrorException(
+        "NETWORK",
+        "NinjaAuth: unable to complete logout.",
+        error
+      );
+    }
+    let result;
+    try {
+      result = await response.json();
+    } catch (error) {
+      throw NinjaAuthErrorException(
+        "INVALID_RESPONSE",
+        "NinjaAuth: the logout service returned an invalid response.",
+        error
+      );
+    }
+    if (!isRecord(result)) {
+      throw NinjaAuthErrorException(
+        "INVALID_RESPONSE",
+        "NinjaAuth: the logout service returned an invalid response envelope.",
+        result
+      );
+    }
+    if (!response.ok || result.success !== true) {
+      throw NinjaAuthErrorException(
+        "LOGOUT_FAILED",
+        "NinjaAuth: the server could not confirm logout.",
+        result
+      );
+    }
+    if (!isRecord(result.data) || result.data.loggedOut !== true) {
+      throw NinjaAuthErrorException(
+        "INVALID_RESPONSE",
+        "NinjaAuth: the logout service returned an invalid confirmation.",
+        result.data
+      );
+    }
   }
   async getSession() {
     if (!this.ensureInitialized()) {
-      throw new Error(
+      throw NinjaAuthErrorException(
+        "INITIALIZATION_FAILED",
         "NinjaAuth: call init() before getSession()."
       );
     }
-    const response = await fetch(
-      `${BASE_URL}/session`,
-      {
-        method: "GET",
-        credentials: "include"
-      }
-    );
-    const result = await response.json();
-    if (!response.ok || !result.success) {
-      throw new Error(
-        result.message || "NinjaAuth: failed to retrieve session."
+    let response;
+    try {
+      response = await fetch(
+        getNinjaConnectEndpoints(
+          this.config.environment ?? "production"
+        ).session,
+        {
+          method: "GET",
+          credentials: "include"
+        }
+      );
+    } catch (error) {
+      throw NinjaAuthErrorException(
+        "NETWORK",
+        "NinjaAuth: unable to retrieve the current session.",
+        error
+      );
+    }
+    let result;
+    try {
+      result = await response.json();
+    } catch (error) {
+      throw NinjaAuthErrorException(
+        "INVALID_RESPONSE",
+        "NinjaAuth: the session service returned an invalid response.",
+        error
+      );
+    }
+    if (!isRecord(result)) {
+      throw NinjaAuthErrorException(
+        "INVALID_RESPONSE",
+        "NinjaAuth: the session service returned an invalid response envelope.",
+        result
+      );
+    }
+    if (response.status === 401 && result.success === false && isRecord(result.error) && result.error.code === "INVALID_SESSION") {
+      return {
+        authenticated: false,
+        user: null,
+        session: null
+      };
+    }
+    if (!response.ok || result.success !== true) {
+      throw NinjaAuthErrorException(
+        "SESSION_FAILED",
+        "NinjaAuth: failed to retrieve the current session.",
+        result
+      );
+    }
+    if (!isNinjaSession(result.data)) {
+      throw NinjaAuthErrorException(
+        "INVALID_RESPONSE",
+        "NinjaAuth: the session service returned an invalid session payload.",
+        result.data
       );
     }
     return result.data;
