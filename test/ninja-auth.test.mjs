@@ -298,6 +298,10 @@ test("login completes the PKCE authorization and exchange flow", async () => {
             capturedAuthorizationUrl.searchParams.get("client_id"),
             "test-client"
         );
+        assert.equal(
+            capturedAuthorizationUrl.searchParams.get("scope"),
+            "openid profile email offline_access"
+        );
 
         return response({
             success: true,
