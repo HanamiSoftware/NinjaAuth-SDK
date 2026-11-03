@@ -1,4 +1,5 @@
 import { NINJA_CONNECT } from "../config";
+import { NinjaAuthErrorException } from "../errors/ErrorHandler";
 export interface AuthorizationLauncher{
     launchAuthorization(authorizationUrl: string): Promise<string>;
 }
@@ -8,7 +9,6 @@ export interface AuthorizationRequest {
     state: string;
     codeChallenge: string;
     scope: string;
-    resource: string;
 }
 
 export interface AuthorizationCallback {
@@ -28,7 +28,6 @@ export function buildAuthorizationUrl(
     url.searchParams.set("client_id", request.clientId);
     url.searchParams.set("redirect_uri", request.redirectUri);
     url.searchParams.set("scope", request.scope);
-    url.searchParams.set("resource", request.resource);
     url.searchParams.set(
         "code_challenge",
         request.codeChallenge
@@ -51,37 +50,57 @@ export function parseAuthorizationCallback(
     responseUrl: string
 ): AuthorizationCallback {
 
-    const url = new URL(responseUrl);
+    let url: URL;
 
-    const error =
-        url.searchParams.get("error");
-
-    if (error) {
-        const description =
-            url.searchParams.get("error_description");
-
-        throw new Error(
-            description
-                ? `NinjaAuth: ${error}: ${description}`
-                : `NinjaAuth: ${error}`
+    try {
+        url = new URL(responseUrl);
+    } catch (error) {
+        throw NinjaAuthErrorException(
+            "INVALID_CALLBACK",
+            "L'indirizzo di risposta dell'autorizzazione non è valido.",
+            error
         );
     }
 
-    const code =
-        url.searchParams.get("code");
+    const error = url.searchParams.get("error");
 
-    const state =
-        url.searchParams.get("state");
+    if (error) {
+
+        const description =
+            url.searchParams.get("error_description");
+
+        if (error === "access_denied") {
+            throw NinjaAuthErrorException(
+                "OAUTH_DENIED",
+                "L'autorizzazione è stata negata.",
+                error
+            );
+        }
+
+        throw NinjaAuthErrorException(
+            "OAUTH_PROVIDER_ERROR",
+            description
+                ? `Il provider di autenticazione ha restituito un errore: ${description}`
+                : `Il provider di autenticazione ha restituito un errore: ${error}`
+        );
+    }
+
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
 
     if (!code) {
-        throw new Error(
-            "NinjaAuth: authorization code is missing."
+        throw NinjaAuthErrorException(
+            "INVALID_CALLBACK",
+            "Il codice di autorizzazione non è presente nella risposta.",
+            error
         );
     }
 
     if (!state) {
-        throw new Error(
-            "NinjaAuth: authorization state is missing."
+        throw NinjaAuthErrorException(
+            "INVALID_CALLBACK",
+            "Lo state non è presente nella risposta di autorizzazione.",
+            error
         );
     }
 

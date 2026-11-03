@@ -2,7 +2,7 @@
 
 NinjaAuth is the TypeScript client SDK for integrating applications with **Ninja Connect**, the identity and session service.
 
-> **Development status:** NinjaAuth Core 0.1 is not yet release-ready. The inspected SDK source still has an incomplete exchange contract, a local development endpoint, an unfinished Web flow, a placeholder logout method, and no SDK test suite in its package scripts. Recent refresh/logout concurrency tests validate important backend invariants, but are not a complete live Authgear end-to-end test.
+> **Development status:** NinjaAuth Core 0.1 is not yet release-ready. The inspected SDK source still has an incomplete Extension exchange contract, a local development endpoint, an unfinished Web flow, a placeholder SDK logout method, and no SDK test suite in its package scripts. RT-001/RT-002 and RT-003 cover focused backend concurrency scenarios (real PostgreSQL, mocked upstream provider); they are not a complete live AuthGear end-to-end test. See the [roadmap](docs/ROADMAP.md) for evidence and next steps.
 
 ## Documentation
 
@@ -39,6 +39,8 @@ This illustrates the intended developer experience; it is **not** a guarantee th
 - Product-specific profiles, roles, permissions, and capabilities remain owned by each application.
 - The optional **NinjaAppAdapter<TProfile>** is an integration boundary for Ninja ecosystem products; it must not turn product-specific data into shared identity data.
 - OAuth state and PKCE must be validated across client and server. Session secrets remain opaque to SDK JavaScript.
+- The public SDK contract is provider-neutral: NinjaAuth integrates with Ninja Connect, while AuthGear remains an upstream implementation detail behind the broker.
+- Chrome and Web platform behavior must be isolated behind platform adapters; the shared Core must not depend on browser-extension APIs.
 - A passing focused concurrency test is evidence for the tested interleaving, not proof that every possible distributed execution has been covered.
 
 ## Repository scope
