@@ -19,6 +19,7 @@ import { ChromeOAuthTransactionStorage } from "./platform/chrome/TransactionStor
 import { ChromeAuthorizationLauncher } from "./platform/chrome/AuthorizationLauncher";
 import { NinjaAuthErrorException } from "./errors/ErrorHandler";
 import {
+    NINJA_CONNECT,
     getNinjaConnectEndpoints
 } from "./config";
 
@@ -187,7 +188,7 @@ class NinjaAuthClient {
             redirectUri: this.config!.redirectUri,
             codeChallenge: challenge,
             state,
-            scope: "openid offline_access"
+            scope: NINJA_CONNECT.DEFAULT_SCOPE
         });
 
         const transaction = {
