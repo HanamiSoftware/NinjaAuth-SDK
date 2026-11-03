@@ -438,3 +438,42 @@ test("login rejects a failed exchange and still clears the transaction", async (
     );
     assert.equal(chromeMock.transactions.size, 0);
 });
+
+
+test("login preserves the exchange error when transaction cleanup also fails", async () => {
+    initialize();
+
+    chromeMock.storage.session.remove = async () => {
+        throw new Error("Storage cleanup unavailable");
+    };
+
+    globalThis.fetch = async () => response({
+        success: false,
+        error: { code: "INVALID_GRANT" }
+    }, 400);
+
+    await assert.rejects(
+        NinjaAuth.login(),
+        (error) => error.code === "EXCHANGE_FAILED"
+    );
+});
+
+test("login reports transaction cleanup failure after a successful exchange", async () => {
+    initialize();
+
+    chromeMock.storage.session.remove = async () => {
+        throw new Error("Storage cleanup unavailable");
+    };
+
+    globalThis.fetch = async () => response({
+        success: true,
+        data: { user: USER }
+    });
+
+    await assert.rejects(
+        NinjaAuth.login(),
+        (error) =>
+            error.code === "TRANSACTION_CLEANUP_FAILED" &&
+            error.originalError?.message === "Storage cleanup unavailable"
+    );
+});
