@@ -58,11 +58,11 @@ The implementation uses conditional database updates and a final session re-read
 
 - The logout route closes its database client in a `finally` block, including error paths.
 
-## Current SDK source snapshot
+## Current SDK worktree snapshot
 
-The following status reflects the SDK source inspected on branch `dev`. It describes code-level implementation, not proof of successful end-to-end behavior.
+**Status boundary:** the repository's default branch may not yet contain the latest local edits described below. These notes record the developer's reported working-tree progress as of 1 November 2026; they are not a substitute for reviewing the synchronized source or running the complete validation suite.
 
-| Area | Status | Notes |
+| Area | Current status | Notes |
 |---|---|---|
 | TypeScript package/build setup | 🟡 Present | tsup build and typecheck scripts exist; automated test script and release hardening remain |
 | init() | 🟡 Partial | Validates client ID and redirect URI; unsupported Web must not be silently selected |

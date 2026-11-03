@@ -135,6 +135,41 @@ The following cases remain open for analysis/testing; they are not claimed to be
 
 The exact JSON success/error envelope and the data.user shape returned by /v1/exchange must be verified against the shared Worker response helpers and the actual current Worker branch. Do not assume the SDK's current data.user cast proves the response contract.
 
+## SDK implementation notes — 1 November 2026
+
+The following reflects changes reported in the developer's local working tree during the current session. It is not evidence that the changes have been pushed, reviewed from the repository, or covered by automated tests.
+
+### Internal errors and callback handling
+
+- An internal `NinjaAuthInternalError` class carries a typed `InternalErrorCode` and optional original cause.
+- `NinjaAuthErrorException(error, code, message)` returns an existing classified error unchanged, or wraps an unknown error with a clear SDK-level message.
+- Callback parsing classifies malformed callbacks, OAuth denial (`access_denied`), and other provider errors separately.
+- The authorization flow compares the callback state with the originally generated state and removes the stored transaction in a `finally` path.
+- The transaction cleanup path still needs review to ensure a storage-removal failure cannot mask the primary operation error.
+
+### Chrome transaction storage
+
+The local implementation uses `chrome.storage.session`. The `get()` method currently uses a TypeScript assertion for the retrieved value:
+
+```ts
+return (result[key] as OAuthTransaction | undefined) ?? null;
+```
+
+This resolves the static type mismatch but does not validate the stored value at runtime. Runtime validation remains a separate hardening consideration. The `@types/chrome` package has been installed as a development dependency to provide Chrome API typings.
+
+### Authorization request parameters
+
+The current local authorization URL builder retains the `openid` and `offline_access` scopes and no longer adds `profile`, `email`, or a `resource` parameter by default. Any future supported parameters should be configured and validated through the SDK initialization contract rather than silently hardcoded.
+
+### Session lookup semantics to preserve
+
+- A valid anonymous Worker response is a successful normalized session: `{ authenticated: false, user: null, session: null }`.
+- A valid authenticated response must contain a valid user and session metadata.
+- Network failures, non-success Worker envelopes, malformed JSON, and malformed session data are operational errors; they must reject the Promise and must not be treated as anonymous.
+- `getSession()` must not launch interactive authorization.
+
+The implementation of `getSession()` validation and these semantics is the next SDK task; this section records the contract, not a claim that the method is already complete.
+
 ## Acceptance checklist
 
 - [ ] Method, path, content type, required fields, and response schema are documented for each endpoint.
