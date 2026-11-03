@@ -53,6 +53,10 @@ The project milestone name is **NinjaAuth v1.0.1-beta**, agreed on 3 November 20
 
 No npm publish, release tag, or public release is claimed. Align the package version, source constant, generated artifacts, and vendored Extension bundle before creating the v1.0.1-beta tag.
 
+## SDK branch boundary
+
+The SDK repository currently exposes master and dev. GitHub compare reports dev 27 commits ahead of master as of 3 November 2026. This milestone review and its documentation branch are based on master commit d2b7ea44dcd769fcb3ce3cb145d737f657e55150. The dev branch has not been audited as the release base; do not assume its source, generated artifacts, or documentation are identical to master.
+
 ## Verified cross-repository state — 3 November 2026
 
 ### NinjaURL Extension
