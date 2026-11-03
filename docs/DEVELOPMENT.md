@@ -1,8 +1,8 @@
-# Development Guide
+# NinjaAuth SDK — Development Guide
 
 ## Requirements
 
-The SDK is a TypeScript package using tsup. Install a supported Node.js LTS release and npm, then install dependencies:
+The SDK is a TypeScript package built with tsup. Use a supported Node.js LTS release and npm.
 
 ~~~bash
 npm install
@@ -11,106 +11,70 @@ npm install
 ## SDK scripts
 
 ~~~bash
-npm run build
-npm run dev
 npm run typecheck
 npm test
+npm run build
 ~~~
 
-- build: creates ESM, CJS, declaration files, and an IIFE bundle via tsup.
-- dev: runs tsup in watch mode.
 - typecheck: runs TypeScript without emitting output.
-- test: runs the Node.js built-in test runner against the built ESM bundle. Run the build before the tests.
+- test: runs the Node.js built-in test runner against test/ninja-auth.test.mjs. The tests import the built ESM artifact, so build before running the suite when source changes have not yet been built.
+- build: creates ESM, CJS, declaration files, and the IIFE bundle via tsup.
 
-The SDK test suite uses mocked Chrome extension APIs and mocked Worker HTTP responses. It verifies the SDK authorization, PKCE/state, exchange, session, logout, cookie-credential, and error-handling behavior. It is not a live end-to-end test against a deployed Worker or OAuth provider.
-
-## Chrome API typings
-
-The Chrome extension implementation uses the Chrome Identity and Storage APIs. Install their TypeScript declarations as a development dependency:
-
-```bash
-npm install --save-dev @types/chrome
-```
-
-If `tsconfig.json` defines an explicit `compilerOptions.types` array, make sure it includes `"chrome"` while preserving any other required entries. Do not add a `types` restriction if the project does not need one.
-
-After installation, run:
-
-```bash
-npm run typecheck
-```
-
-If the editor still reports stale diagnostics, restart the TypeScript server. Remember that Chrome type declarations provide compile-time types only; values loaded from extension storage or network responses still require runtime validation.
+The current test file contains 20 top-level test cases. It uses mocked Chrome extension APIs and mocked Auth Worker HTTP responses. These tests validate the SDK contract and selected success/failure paths; they are not live end-to-end tests against a deployed Worker or identity-provider tenant.
 
 ## Suggested SDK workflow
 
-1. Read the [architecture](ARCHITECTURE.md) and [API contract](API-CONTRACT.md).
-2. Run npm run typecheck before making changes.
+1. Read Architecture and API contract.
+2. Run npm run typecheck.
 3. Add a focused test for each behavior change.
-4. Run typecheck, tests, and npm run build.
-5. Inspect generated declarations and bundles when public API changes.
-6. Update the [roadmap](ROADMAP.md) and relevant technical document whenever behavior or endpoint schemas change.
+4. Run npm run build.
+5. Run npm test.
+6. Inspect generated declarations, ESM/CJS output, and IIFE bundle when public API or protocol behavior changes.
+7. Update Roadmap and the relevant technical document.
+8. For cross-repository changes, record the exact SDK, Extension, and Worker commits used.
 
-## Working with the Auth Worker
+## Environment configuration
 
-The Worker currently lives in the [NinjaURL repository](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker). Its dedicated repository transfer is a future task and has not been performed.
+- development: http://127.0.0.1:8787/v1 for the local Ninja Connect Auth Worker.
+- production: https://auth.ninjaconnect.io/v1.
+- The SDK defaults to production; local development must opt into environment: "development".
+- The authorization origin remains https://auth.ninjaconnect.io.
 
-Worker CI is defined in .github/workflows/workers-ci.yml in that repository. The audited branch includes typechecks and unit tests for the Workers, plus PostgreSQL integration tests for refresh/logout concurrency.
+Do not change Worker ports, CORS, cookie attributes, or deployment configuration without reviewing the corresponding Worker setup.
 
-### Verified backend scenarios
+## Chrome Extension integration
 
-The following CI runs completed successfully on branch test/auth-refresh-concurrency-rt001:
+The NinjaURL Extension loads the SDK IIFE in its classic Manifest V3 Background Service Worker through importScripts. The Background owns SDK initialization and translates SDK results into runtime messages. The Side Panel remains a UI client and must not implement OAuth or call Auth Worker session routes directly.
 
-- [RT-001 — concurrent refresh with stale invalid_grant](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41073531083)
-- [RT-002 — logout during concurrent refresh](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41078846722)
+The Extension's cache-first restore implementation is present on its remote dev branch as reviewed on 3 November 2026. It is not yet present on Extension master.
 
-RT-001 and RT-002 use real PostgreSQL persistence on the Neon test database and mock identity-provider HTTP responses. RT-003 is a separate focused resolver/logout race test in `Workers/auth-worker/integration-tests/resolve-session-logout-race.integration.test.ts`; it uses real Neon/PostgreSQL state and a mocked upstream refresh response while exercising the real Worker logout route. CI run [41196276386](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41196276386) was reported successful by the project owner and should be independently rechecked. These are focused integration tests, not live AuthGear end-to-end tests. The branches have not been merged or deployed.
+### Cache-first restore rule
 
-### Test boundaries
+- Cached user: restore the UI immediately with authenticated: true, user, and session: null; do not call /v1/session just to open the panel.
+- No cached user: call NinjaAuth getSession().
+- Temporary session lookup failure: preserve the cache and surface the error; do not convert the failure into anonymous state.
+- Before any protected operation, verify the live session. A cached user is not an authorization credential.
 
-A green test means the asserted invariant held for the tested execution. It does not establish that every possible ordering, timeout, provider behavior, or network failure has been tested.
+## Cross-repository verification
 
-When a new concurrency issue is found:
+The Auth Worker currently lives in [NinjaURL-URL-Shortener/Workers/auth-worker](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker). Its transfer to a dedicated Ninja Connect repository has not been completed.
 
-1. Reproduce and describe the exact interleaving.
-2. State the invariant that must hold.
-3. Add a regression test before changing implementation where practical.
-4. Verify persisted database state, not only HTTP responses.
-5. Record which dependencies are real and which are mocked.
-6. Add the scenario to the [API contract verification record](API-CONTRACT.md#backend-concurrency-verification).
+When verifying backend concurrency behavior, record whether PostgreSQL is real or mocked and whether the upstream identity provider is live or simulated. RT-001/RT-002/RT-003 are focused PostgreSQL integration tests with mocked upstream provider responses, not live provider E2E.
 
-## Next integration work — Extension and Web
+## Beta milestone and release checklist
 
-Use a contract-first sequence:
+The project milestone is named **NinjaAuth v1.0.1-beta**. This is not yet the actual package version: package.json and src/NinjaAuth.ts still say 0.1.0.
 
-1. Finalize extension API schemas and response/error envelopes before changing SDK call sites.
-2. Keep the shared Core independent of Chrome APIs; platform-specific behavior belongs in adapters.
-3. Define Web redirect/callback and transaction storage interfaces, including multi-tab and credentialed-cookie behavior.
-4. Integrate the SDK into the extension background service worker; the sidepanel should communicate with the background rather than own OAuth state, PKCE, or session orchestration.
-5. Validate login, session restore, logout, and login-again against the intended Auth Worker environment.
-6. Add tests for success, cancellation, invalid state, malformed responses, network failure, and revoked/expired sessions.
+Before creating a beta package/tag:
 
-AuthGear remains the current upstream provider. Do not hardcode provider-specific assumptions in the SDK public contract. OIDC Discovery and provider interoperability are planned work; provider secrets and token lifecycle remain server-side in Ninja Connect.
+- [ ] Align package.json and the source runtime version constant to 1.0.1-beta.
+- [ ] Rebuild all SDK artifacts after the default scope change.
+- [ ] Verify the generated IIFE sends openid profile email offline_access.
+- [ ] Re-vendor the rebuilt IIFE into the Extension.
+- [ ] Run typecheck, tests, and build on the exact release commit.
+- [ ] Build and load the Extension in Chrome.
+- [ ] Verify login, session restoration, logout, login again, and cookie/CORS behavior.
+- [ ] Verify cache-first restore and ensure protected actions perform a live session check.
+- [ ] Confirm docs, package metadata, source version, and distributed artifacts describe the same release.
 
-## Security checklist
-
-- Keep PKCE verifier and OAuth transaction data short-lived.
-- Validate callback state before exchanging the authorization code.
-- Remove transaction data after success and all error/cancellation paths.
-- Never log access tokens, refresh tokens, session secrets, or PKCE verifiers.
-- Keep secrets and database access in the Worker, not in the browser SDK.
-- Use HTTPS in production and explicit environment configuration.
-- Treat untrusted response bodies as unknown; validate them before accessing nested properties.
-- Test fetch failures, non-JSON server responses, provider errors, and authorization cancellation.
-- Keep product-specific roles and permissions in the consuming product, not in Ninja Connect.
-
-## Pull request checklist
-
-- [ ] Typecheck passes.
-- [ ] Tests added/updated and pass.
-- [ ] Build succeeds.
-- [ ] SDK and Worker contract stays aligned.
-- [ ] Documentation and roadmap are updated.
-- [ ] Security-sensitive invariants are covered by focused tests.
-- [ ] No secrets or generated local files are committed accidentally.
-- [ ] No merge, deploy, or release is performed without explicit approval.
+Do not claim a release or CI success unless the exact commit and run provide evidence.

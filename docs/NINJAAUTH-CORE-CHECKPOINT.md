@@ -1,148 +1,74 @@
-# NinjaAuth — Core Checkpoint 0.1
+# NinjaAuth v1.0.1-beta — checkpoint di progetto
 
-> **Aggiornato:** 1 novembre 2026  
-> Per lo stato operativo completo e le priorità consultare la [roadmap](ROADMAP.md). Questo checkpoint raccoglie le decisioni architetturali e la Definition of Done del Core.
+**Data:** 3 novembre 2026  
+**Stato:** milestone interna nominata; release SDK non ancora pubblicata.
 
-## 1. Obiettivo
+## Versione: distinzione necessaria
 
-NinjaAuth è l'SDK TypeScript che permette a un'applicazione di utilizzare Ninja Connect per autenticazione, identità condivisa e sessione.
+Il nome concordato per questo traguardo è **NinjaAuth v1.0.1-beta**. Al momento, però, i metadati reali del pacchetto non sono ancora allineati:
 
-Principio guida:
+- package.json: 0.1.0.
+- src/NinjaAuth.ts: VERSION = "0.1.0".
+- dist/index.global.js: non rigenerato dopo l'ultima modifica al default scope.
+- Bundle vendorizzato nell'estensione: contiene già lo scope openid profile email offline_access.
 
-> **NinjaAuth gestisce la complessità dell'autenticazione. L'applicazione rimane responsabile dei propri dati e delle proprie autorizzazioni.**
+Quindi questo documento battezza il milestone di sviluppo; non dichiara una release pubblicata né autorizza a distribuire il pacchetto con un numero di versione non ancora incorporato negli artefatti.
 
-NinjaAuth deve poter essere utilizzato dai prodotti dell'ecosistema Ninja e da sviluppatori/applicazioni esterne all'ecosistema.
+## Cosa è implementato nel SDK
 
-## 2. Confini architetturali
+- init(): configurazione con client ID, redirect URI, platform ed environment.
+- login(): Authorization Code + PKCE per Chrome Extension.
+- State UUID e confronto del callback con lo state originario.
+- Exchange JSON conforme al contratto Worker.
+- Default scope letto da NINJA_CONNECT.DEFAULT_SCOPE.
+- getSession(): lettura della sessione esistente, validazione del payload e distinzione tra sessione anonima ed errori operativi.
+- logout(): revoca della sessione corrente tramite POST /v1/logout.
+- Errori interni tipizzati, incluso TRANSACTION_CLEANUP_FAILED.
+- Suite node:test presente con 20 casi top-level.
 
-### Ninja Connect
+## Architettura confermata
 
-Ninja Connect è l'Identity Broker centrale e gestisce autenticazione tramite identity provider, identità Ninja Connect condivisa e sessione centrale.
+- Ninja Connect è il broker centrale di identità e sessione.
+- NinjaAuth è l'SDK client, non il proprietario del profilo applicativo.
+- Ogni prodotto mantiene profili, ruoli, permessi, capability e regole business.
+- AuthGear resta un provider upstream dietro Ninja Connect.
+- Il cookie di sessione è HttpOnly; il client non legge né persiste il secret.
+- getSession() non avvia login interattivo.
+- Solo 401 INVALID_SESSION esplicito diventa una sessione non autenticata; gli errori temporanei restano errori.
+- Web login non è implementato e deve continuare a fallire esplicitamente.
 
-AuthGear è il provider attuale, ma resta un dettaglio upstream dietro Ninja Connect. Le sessioni SSO AuthGear non sono le righe `auth_sessions` di Ninja Connect: il logout AuthGear non modifica direttamente il database delle sessioni Ninja.
+## Integrazione NinjaURL Extension
 
-Ninja Connect non gestisce il modello di autorizzazione specifico di ogni prodotto.
+L'integrazione NinjaAuth è presente sul branch remoto Extension master al commit 9606469a3f6412c5d47c9ee83c38b359499e1e8d.
 
-### NinjaAuth SDK
+La variante cache-first di restoreSession() è presente sul branch remoto Extension dev (due commit avanti rispetto a master), non ancora su master:
 
-Il client SDK orchestra PKCE, OAuth state, launcher e transaction storage specifici della piattaforma, callback, code exchange e API pubblica per login, sessione e logout. Il contratto pubblico deve restare provider-neutral: l'SDK parla con Ninja Connect `/v1/*`, non direttamente con gli endpoint AuthGear `/oauth2/*`.
+- utente in chrome.storage.local: restituisce authenticated: true, user, session: null senza chiamare /v1/session;
+- nessun utente in cache: chiama NinjaAuth getSession();
+- errore temporaneo: non cancella la cache.
 
-Non deve accedere a database, chiavi di cifratura o session secret grezzi.
+Il valore authenticated: true nel percorso cache-only ripristina l'interfaccia, ma non certifica una sessione valida. Prima di un'operazione protetta sarà necessario eseguire una verifica live con NinjaAuth. Questa guardia deve essere verificata e completata prima del rilascio.
 
-### Applicazioni
+## Verifiche disponibili e limiti
 
-Ogni applicazione gestisce autonomamente profilo applicativo, ruoli, permessi, capabilities, dati e regole di business.
+- Il test file SDK contiene 20 casi top-level.
+- L'utente aveva riportato 20 test superati su un commit precedente; questo non sostituisce un'esecuzione sul commit release candidate corrente.
+- Per il commit SDK più recente verificato non sono stati restituiti status check GitHub.
+- La build Extension, il caricamento in Chrome e l'E2E reale con cookie HttpOnly/CORS non sono ancora verificati.
+- I test RT-001/RT-002/RT-003 del Worker sono test concorrenti mirati con PostgreSQL reale e provider simulato; non sono E2E live.
 
-NinjaURL non deve conoscere NinjaReviews e viceversa.
+## Definition of Done — beta package
 
-### NinjaAppAdapter<TProfile>
+- [ ] Aggiornare package.json e VERSION a 1.0.1-beta.
+- [ ] Rigenerare dist/ e verificare che sorgente e bundle usino lo stesso default scope.
+- [ ] Aggiornare il bundle IIFE vendorizzato nell'estensione.
+- [ ] Eseguire npm run typecheck, npm test, npm run build sul commit esatto.
+- [ ] Build e caricamento dell'estensione in Chrome.
+- [ ] E2E: login, session lookup, logout, login successivo.
+- [ ] Verifica cookie HttpOnly, CORS e ambiente development/production.
+- [ ] Verifica del restore cache-first e della validazione live prima delle operazioni protette.
+- [ ] Allineare documentazione, API, tipi, package metadata e artefatti distribuiti.
 
-L'adapter applicativo è il confine opzionale che permette ai prodotti first-party di associare un profilo tipizzato all'identità condivisa senza contaminare NinjaUser.
+## Decisione
 
-Non è un OAuth/platform adapter. Non centralizza RBAC in Ninja Connect e non è necessario per l'uso standalone.
-
-**Stato:** decisione architetturale definita; non dichiarare il tipo come API pubblica disponibile finché non sarà implementato ed esportato.
-
-## 3. API pubblica prevista
-
-Il Core espone concettualmente:
-
-~~~ts
-NinjaAuth.init(config);
-const user = await NinjaAuth.login();
-const session = await NinjaAuth.getSession();
-await NinjaAuth.logout();
-~~~
-
-La firma e i tipi definitivi devono essere verificati sulla reale implementazione prima del rilascio.
-
-## 4. Sessione centrale
-
-Dopo il token exchange, Ninja Connect risolve l'identità, genera un session secret casuale, memorizza nel database solo l'hash del secret, conserva il refresh token upstream cifrato e imposta il cookie ninja_session.
-
-Il cookie è HttpOnly e deve restare opaco al codice JavaScript dell'SDK. La sessione ha una scadenza ordinaria e una scadenza assoluta. Il refresh non deve estendere la scadenza assoluta e non deve riattivare una sessione revocata.
-
-## 5. Concorrenza — verifiche completate
-
-Tre scenari critici del Worker hanno superato test d'integrazione PostgreSQL (per RT-003 il proprietario del progetto ha riferito CI riuscita; il run va ricontrollato prima di considerarlo audit indipendente):
-
-| Test | Invariante | Esito |
-|---|---|---|
-| RT-001 | Un refresh concorrente obsoleto che riceve invalid_grant non deve revocare la sessione già aggiornata da un'altra richiesta | PASS |
-| RT-002 | Un logout completato mentre refresh è in volo deve prevalere; il refresh non deve riattivare la sessione locale | PASS |
-| RT-003 | Un logout committato prima della revalidazione finale del resolver deve impedire il ritorno di un contesto autenticato | Test d'integrazione aggiunto; CI owner-reported PASS |
-
-RT-001/RT-002 sono sul branch `test/auth-refresh-concurrency-rt001`; RT-003 è sul branch `test/authgear-refresh-live-diagnostic` del repository NinjaURL. I test usano PostgreSQL/Neon reale e risposte HTTP dell'identity provider simulate.
-
-- [CI RT-001](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41073531083)
-- [CI RT-002](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41078846722)
-- [CI RT-003](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/actions/runs/41196276386) — risultato riportato come PASS dal proprietario; da ricontrollare indipendentemente.
-
-Questi risultati dimostrano gli specifici scenari orchestrati, non tutte le possibili interleaving. I test non sono un E2E live con Authgear. Le modifiche non risultano mergeate né deployate.
-
-RT-003 aggiunge una lettura finale della riga `auth_sessions` dopo il refresh e il recupero dell'utente, rifiutando sessione assente, revocata o scaduta. Copre i logout committati prima di tale lettura; non impedisce un logout che avvenga subito dopo il controllo finale.
-
-Restano da analizzare:
-- refresh upstream che restituisce un nuovo token dopo che il logout ha già tentato la revoca del token precedente;
-- ulteriori ordinamenti, timeout e failure path prioritizzati in base al rischio.
-
-## 6. Stato SDK — aggiornamento sessione 1 novembre 2026
-
-Le note seguenti descrivono il lavoro riferito nel working tree locale. Non attestano che le modifiche siano già presenti sul branch remoto né che siano state validate con una suite completa.
-
-- È stato installato `@types/chrome` come dipendenza di sviluppo.
-- Il problema di tipizzazione in `TransactionStorage.get()` è stato risolto con un'asserzione sul valore restituito da `chrome.storage.session.get()`. L'asserzione non sostituisce una validazione runtime dei dati persistiti.
-- È stata introdotta la classe interna `NinjaAuthInternalError`, con codici tipizzati e conservazione dell'errore originale.
-- È stata introdotta `NinjaAuthErrorException()` per normalizzare gli errori senza esporre i dettagli OAuth, Chrome o Worker all'applicazione integratrice.
-- Il parser del callback classifica callback malformate, diniego OAuth e errori del provider.
-- Il flusso confronta lo state ricevuto con quello originario e rimuove la transazione in un blocco `finally`. Resta da verificare che un errore durante la rimozione non nasconda l'errore principale.
-- Il builder dell'URL di autorizzazione è stato semplificato: restano gli scope `openid` e `offline_access`; sono stati rimossi i default `profile`, `email` e il parametro `resource`.
-
-**Non ancora verificato/completato:** formato UUID dello state, allineamento JSON di `/v1/exchange`, validazione robusta della risposta, endpoint configurabili, `getSession()`, `logout()`, test automatici SDK e flusso end-to-end completo.
-
-Il prossimo passo operativo concordato è completare `getSession()`: una risposta anonima valida deve restituire una sessione anonima normalizzata; un errore di rete, del Worker o una risposta malformata deve invece causare un rigetto della Promise. `getSession()` non deve avviare login interattivo.
-
-## 7. Logout e gestione account
-
-- `POST /v1/logout` è logout della sola sessione identificata dal cookie corrente.
-- `POST /v1/logout/all` è una proposta di logout globale, non una route implementata.
-- Le sessioni multiple dello stesso utente restano indipendenti; revocare una sessione non deve revocare le altre.
-- AuthGear `/logout` termina la sessione SSO del provider ma non modifica direttamente `auth_sessions`.
-- Un'eventuale area Ninja Connect Settings gestirà identità e sessioni Ninja; la pagina AuthGear Settings riguarda invece profilo e sicurezza del provider.
-
-## 8. Principi da non violare
-
-- Identità condivisa e autorizzazione applicativa restano separate.
-- Nessun ruolo o permesso prodotto viene centralizzato in Ninja Connect.
-- Il client non legge il cookie HttpOnly né conserva session secret grezzi.
-- Un JWT decodificato senza verifica non è una credenziale attendibile.
-- Il refresh non può annullare una revoca.
-- I test devono documentare chiaramente cosa è reale e cosa è simulato.
-- Nessun merge, deploy o trasferimento del Worker senza approvazione esplicita.
-
-## 9. Definition of Done — Core 0.1
-
-- [ ] init() valida la configurazione e usa endpoint espliciti per ambiente.
-- [ ] login() completa OAuth Authorization Code + PKCE.
-- [ ] Il callback state è confrontato con la transazione originaria.
-- [ ] Il code exchange rispetta il contratto effettivo del Worker.
-- [ ] Il risultato è un NinjaUser normalizzato.
-- [ ] getSession() ripristina la sessione senza avviare login interattivo.
-- [ ] Il refresh è gestito server-side e rispetta revoca e absolute expiry.
-- [ ] logout() revoca la sessione centrale e gestisce il risultato della revoca upstream.
-- [ ] SDK e Worker hanno test automatici per i casi critici.
-- [ ] Documentazione, tipi pubblici e comportamento effettivo coincidono.
-
-Solo allora sarà possibile congelare e rilasciare NinjaAuth Core 0.1.
-
-## 10. Prossimo ordine di lavoro
-
-1. Aggiornare e completare i contratti API del flow Extension (`/v1/exchange`, `/v1/session`, `/v1/user/me`, `/v1/logout`), compresi payload, response, errori, cookie e CORS.
-2. Definire le interfacce platform-neutral e il flow Web (redirect/callback, transaction storage, multi-tab, cookie/CORS).
-3. Integrare NinjaAuth nel background service worker dell'estensione, mantenendo il sidepanel come client del background e senza duplicare la logica OAuth.
-4. Chiudere login, ripristino sessione e logout Extension end-to-end; aggiungere test SDK e CI.
-5. Decidere se e come esporre un eventuale logout globale nell'API pubblica; `/v1/logout/all` resta non implementato.
-6. Completare i test backend concorrenti residui prioritari.
-7. Implementare Web come milestone separata dopo la definizione dei contratti.
-8. Mantenere provider neutrality: non codificare comportamenti AuthGear-specifici nell'API pubblica; OIDC Discovery/interoperabilità resta un requisito architetturale futuro.
-9. Verificare la Definition of Done, aggiornare la documentazione e solo dopo preparare il freeze.
+**NinjaAuth v1.0.1-beta nasce oggi come milestone di progetto.** La release tecnica sarà dichiarata soltanto quando tutti i punti obbligatori della Definition of Done saranno verificati sullo stesso commit e sugli stessi artefatti.
