@@ -22,6 +22,16 @@ The SDK sends a JSON body containing `state` (UUID), `code`, `client_id`, `code_
 
 The SDK uses PKCE with `S256` and validates the callback state against the state generated for the initiating transaction before attempting the exchange.
 
+### Authorization scope
+
+The current default authorization scope is read from `NINJA_CONNECT.DEFAULT_SCOPE`:
+
+```text
+openid profile email offline_access
+```
+
+The Extension integration requires the profile claims used by NinjaURL (email, name and picture). A future SDK feature may let each consuming application configure additional scopes or override the baseline; that public configuration API is not part of the current implementation.
+
 API endpoints are environment-aware: `development` uses the local Wrangler endpoint `http://127.0.0.1:8787/v1`; `production` uses `https://auth.ninjaconnect.io/v1`. The default environment is `production`. The OAuth authorization endpoint remains `https://auth.ninjaconnect.io`.
 
 ## OAuth state and transaction handling
