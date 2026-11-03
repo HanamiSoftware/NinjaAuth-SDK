@@ -19,6 +19,7 @@ import { ChromeOAuthTransactionStorage } from "./platform/chrome/TransactionStor
 import { ChromeAuthorizationLauncher } from "./platform/chrome/AuthorizationLauncher";
 import { NinjaAuthErrorException } from "./errors/ErrorHandler";
 import {
+    NINJA_CONNECT,
     getNinjaConnectEndpoints
 } from "./config";
 
@@ -187,7 +188,7 @@ class NinjaAuthClient {
             redirectUri: this.config!.redirectUri,
             codeChallenge: challenge,
             state,
-            scope: "openid offline_access"
+            scope: NINJA_CONNECT.DEFAULT_SCOPE
         });
 
         const transaction = {
@@ -197,6 +198,8 @@ class NinjaAuthClient {
         };
 
         await storage.save(state, transaction);
+
+        let hasPrimaryError = false;
 
         try {
 
@@ -234,9 +237,27 @@ class NinjaAuthClient {
                 returnedTransaction.redirectUri
             );
 
+        } catch (error) {
+
+            hasPrimaryError = true;
+            throw error;
+
         } finally {
 
-            await storage.remove(state);
+            try {
+                await storage.remove(state);
+            } catch (cleanupError) {
+                // Cleanup must never replace the original authorization
+                // or exchange error. If the flow otherwise succeeded,
+                // report the failed cleanup explicitly.
+                if (!hasPrimaryError) {
+                    throw NinjaAuthErrorException(
+                        "TRANSACTION_CLEANUP_FAILED",
+                        "Non è stato possibile eliminare la transazione OAuth.",
+                        cleanupError
+                    );
+                }
+            }
 
         }
     }
