@@ -198,6 +198,8 @@ class NinjaAuthClient {
 
         await storage.save(state, transaction);
 
+        let hasPrimaryError = false;
+
         try {
 
             const responseUrl =
@@ -234,9 +236,27 @@ class NinjaAuthClient {
                 returnedTransaction.redirectUri
             );
 
+        } catch (error) {
+
+            hasPrimaryError = true;
+            throw error;
+
         } finally {
 
-            await storage.remove(state);
+            try {
+                await storage.remove(state);
+            } catch (cleanupError) {
+                // Cleanup must never replace the original authorization
+                // or exchange error. If the flow otherwise succeeded,
+                // report the failed cleanup explicitly.
+                if (!hasPrimaryError) {
+                    throw NinjaAuthErrorException(
+                        "TRANSACTION_CLEANUP_FAILED",
+                        "Non è stato possibile eliminare la transazione OAuth.",
+                        cleanupError
+                    );
+                }
+            }
 
         }
     }
