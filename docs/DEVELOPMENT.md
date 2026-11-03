@@ -14,13 +14,33 @@ npm install
 npm run build
 npm run dev
 npm run typecheck
+npm test
 ~~~
 
 - build: creates ESM, CJS, declaration files, and an IIFE bundle via tsup.
 - dev: runs tsup in watch mode.
 - typecheck: runs TypeScript without emitting output.
+- test: runs the Node.js built-in test runner against the built ESM bundle. Run the build before the tests.
 
-The inspected SDK package manifest does not define a test script. SDK unit/integration test coverage remains work to do before release readiness.
+The SDK test suite uses mocked Chrome extension APIs and mocked Worker HTTP responses. It verifies the SDK authorization, PKCE/state, exchange, session, logout, cookie-credential, and error-handling behavior. It is not a live end-to-end test against a deployed Worker or OAuth provider.
+
+## Chrome API typings
+
+The Chrome extension implementation uses the Chrome Identity and Storage APIs. Install their TypeScript declarations as a development dependency:
+
+```bash
+npm install --save-dev @types/chrome
+```
+
+If `tsconfig.json` defines an explicit `compilerOptions.types` array, make sure it includes `"chrome"` while preserving any other required entries. Do not add a `types` restriction if the project does not need one.
+
+After installation, run:
+
+```bash
+npm run typecheck
+```
+
+If the editor still reports stale diagnostics, restart the TypeScript server. Remember that Chrome type declarations provide compile-time types only; values loaded from extension storage or network responses still require runtime validation.
 
 ## Suggested SDK workflow
 

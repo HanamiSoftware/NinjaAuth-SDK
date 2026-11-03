@@ -75,8 +75,23 @@ The inspected repository source includes:
 - src/platform/chrome/AuthorizationLauncher.ts: Chrome Identity API launcher.
 - src/platform/chrome/TransactionStorage.ts: temporary transaction storage using chrome.storage.session.
 - src/types/types.ts: SDK configuration, user/session, and transaction types.
+- src/errors/NinjaAuthError.ts and src/errors/ErrorHandler.ts: internal typed error model and normalization helper (local implementation reported on 1 November 2026; pending repository sync and validation).
 
 The inspected source still contains a localhost API base URL, an incomplete Web branch, and a TODO in logout(). The current source snapshot and its limitations are recorded in the [roadmap](ROADMAP.md).
+
+## Internal error boundary
+
+OAuth, Chrome, Worker, and transport details are implementation concerns of NinjaAuth. Consuming applications should receive understandable Promise rejections from the public SDK methods, not be required to interpret platform or protocol internals.
+
+The current local implementation introduces an internal `NinjaAuthInternalError` with a typed `InternalErrorCode` and an optional `originalError`. `NinjaAuthErrorException()` normalizes unknown failures while preserving an error that has already been classified. These internal types are not intended to become part of the public SDK API unless a deliberate API decision is made.
+
+Error handling must preserve the distinction between:
+- an expected anonymous session, which is a successful `getSession()` result;
+- an operational failure (network, Worker, malformed response, or session refresh failure), which must reject and must never be silently converted into an anonymous session.
+
+Cleanup of short-lived OAuth transactions belongs inside the SDK. Cleanup failures must not accidentally hide the primary authorization/exchange failure.
+
+**Implementation status:** the error class/helper and callback error classification have been implemented in the local working tree as reported during the 1 November 2026 session. They have not yet been independently reviewed from the repository branch or validated by a complete test run.
 
 ## Intended extension authentication flow
 
@@ -93,6 +108,12 @@ The inspected source still contains a localhost API base URL, an incomplete Web 
 The exact exchange contract must be aligned before this flow is considered complete. The experimental /v1/state endpoint is not a required step in the intended SDK flow; do not reintroduce it as an SDK dependency without an explicit architecture decision.
 
 ## Session architecture
+
+### Observing the current session
+
+`getSession()` allows a consuming application to obtain information about the current authentication session and react to that state. Unlike `login()`, which explicitly starts the authentication flow, `getSession()` only observes and returns the state of the existing session; it does not initiate an interactive login.
+
+The SDK reports authentication state, not application policy. A non-authenticated result means that no valid authenticated Ninja Connect session is available. The consuming application decides how that state affects its own user experience and access rules.
 
 The browser holds an opaque HttpOnly session cookie. SDK JavaScript must not read or persist the raw session secret.
 

@@ -21,6 +21,7 @@ The backend test results below are branch-only evidence. They have not been merg
 - No Worker repository transfer, merge, or deployment is included in the completed test work.
 - AuthGear is the current upstream identity provider, not the owner of Ninja Connect application sessions. AuthGear SSO sessions and Ninja Connect `auth_sessions` records are separate lifecycles.
 - The public NinjaAuth API must remain provider-neutral. AuthGear-specific endpoints, credentials, refresh tokens, and provider secrets remain behind Ninja Connect; OIDC Discovery/interoperability is a planned capability.
+- `login()` starts the interactive authentication flow; `getSession()` observes and returns the current session state without starting login. Only an explicit `401 INVALID_SESSION` is normalized to unauthenticated; other authorization errors and temporary failures remain errors.
 
 ## Completed and verified work
 
@@ -57,11 +58,11 @@ The implementation uses conditional database updates and a final session re-read
 
 - The logout route closes its database client in a `finally` block, including error paths.
 
-## Current SDK source snapshot
+## Current SDK worktree snapshot
 
-The following status reflects the SDK source inspected on branch `dev`. It describes code-level implementation, not proof of successful end-to-end behavior.
+**Status boundary:** the repository's default branch may not yet contain the latest local edits described below. These notes record the developer's reported working-tree progress as of 1 November 2026; they are not a substitute for reviewing the synchronized source or running the complete validation suite.
 
-| Area | Status | Notes |
+| Area | Current status | Notes |
 |---|---|---|
 | TypeScript package/build setup | 🟡 Present | tsup build and typecheck scripts exist; automated test script and release hardening remain |
 | init() | 🟡 Partial | Validates client ID and redirect URI; unsupported Web must not be silently selected |
@@ -71,11 +72,11 @@ The following status reflects the SDK source inspected on branch `dev`. It descr
 | Chrome transaction storage | 🟢 Implemented | Uses `chrome.storage.session`; runtime validation and cleanup failure behavior need review |
 | Callback validation | 🟢 Implemented | Parses code/state, handles OAuth errors, and compares returned state with the initiated state |
 | Code exchange | 🟢 Implemented in SDK | Sends JSON with state, code, client_id, code_verifier, redirect_uri; validates envelope and `data.user`; E2E verification remains |
-| Session lookup | 🟡 Partial | Calls GET /v1/session with credentials; response parsing and runtime validation are not yet robust |
-| Logout | 🔴 SDK incomplete | `NinjaAuth.logout()` is still a TODO |
-| Web platform | 🔴 Not implemented | Login currently has an unfinished branch that can leave its Promise pending; reject unsupported platform explicitly |
-| Endpoint configuration | 🟡 Development works by design | `127.0.0.1:8787/v1` is the intentional local Wrangler endpoint; production endpoint selection/configuration still needs to be made explicit |
-| SDK automated tests | 🔴 Missing | Package manifest has no test script or SDK CI coverage |
+| Session lookup | 🟢 Implemented | Validates the response envelope and authenticated/anonymous `NinjaSession` payloads; mocked contract tests cover active, anonymous, invalid-session, and temporary-error outcomes |
+| Logout | 🟢 Implemented in SDK | POSTs `/v1/logout` with credentials and resolves only after explicit `loggedOut: true` confirmation; mocked success and failure tests are in CI |
+| Web platform | 🟡 Explicitly unsupported | `init()` accepts the platform value, but `login()` rejects with `UNSUPPORTED_PLATFORM`; Web authentication remains unimplemented |
+| Endpoint configuration | 🟢 Implemented | Preserves the local Wrangler endpoint and selects the production Ninja Connect API explicitly; production is the default |
+| SDK automated tests | 🟡 Initial suite and CI implemented | Node.js test runner covers login/PKCE/state/exchange, session, logout, and selected failures; CI runs typecheck, build, and tests. Live Worker/provider E2E remains open |
 | Stable public API and release | 🔴 Not ready | Session/logout behavior, platform handling, tests, public exports, and release criteria remain |
 
 ## Remaining work — priority order
@@ -86,7 +87,7 @@ The following status reflects the SDK source inspected on branch `dev`. It descr
 - [x] Add explicit callback state equality validation against the initiated transaction.
 - [x] Use the transaction's stored redirect URI during exchange.
 - [ ] Review transaction cleanup on launcher rejection, OAuth denial, callback parse errors, exchange failure, and success; ensure cleanup failure does not mask the original error.
-- [ ] Keep `127.0.0.1:8787/v1` as the intentional local Wrangler development endpoint and introduce explicit production endpoint selection. Do not remove or replace the local workflow.
+- [x] Keep `127.0.0.1:8787/v1` as the intentional local Wrangler development endpoint and introduce explicit production endpoint selection. Do not remove or replace the local workflow.
 - [x] Validate the exchange response envelope and `data.user` shape in the SDK against the reviewed Worker response helper; retain end-to-end verification as an open item.
 - [x] Add HTTP status, JSON parsing, envelope, and user-shape checks to the code-exchange path.
 - [ ] Complete extension login end-to-end against the intended local Auth Worker environment.
@@ -97,14 +98,14 @@ The following status reflects the SDK source inspected on branch `dev`. It descr
 
 ### P0 — Complete session lifecycle in the SDK
 
-- [ ] Implement runtime validation in getSession() for the anonymous and authenticated response shapes.
-- [ ] Distinguish a successful anonymous response from HTTP/API/network/temporary refresh failures; never turn a transient failure into anonymous state.
+- [x] Implement runtime validation in getSession() for the anonymous and authenticated response shapes.
+- [x] Distinguish a successful anonymous response from HTTP/API/network/temporary refresh failures; never turn a transient failure into anonymous state.
 - [ ] Validate getSession() for active, near-expiry, refreshed, revoked, expired, and temporary provider failure cases.
-- [ ] Ensure getSession() never starts interactive login.
-- [ ] Implement NinjaAuth.logout() using POST /v1/logout with credentials: "include".
+- [x] Ensure getSession() never starts interactive login.
+- [x] Implement NinjaAuth.logout() using POST /v1/logout with credentials: "include".
 - [ ] Define SDK behavior for already-anonymous sessions and partial upstream revocation failures.
 - [ ] Verify that a subsequent session lookup after logout returns unauthenticated.
-- [ ] Document `/v1/logout` as current-session-only.
+- [x] Document `/v1/logout` as current-session-only.
 - [ ] Decide whether a proposed `/v1/logout/all` belongs in the public SDK API or remains an account-management operation; it is not implemented.
 - [ ] Review Worker upstream revocation semantics: the inspected handler does not check `response.ok` after the provider revoke request. Keep local session revocation authoritative and define how upstream failure is reported.
 
@@ -112,9 +113,9 @@ The following status reflects the SDK source inspected on branch `dev`. It descr
 
 ### P1 — SDK security and test foundation
 
-- [ ] Add a test runner and CI for the SDK package.
-- [ ] Add unit tests for PKCE, state generation/validation, callback parsing, request construction, and response parsing.
-- [ ] Add integration tests against a mocked Auth Worker contract.
+- [x] Add a test runner and CI for the SDK package (Node.js built-in test runner; GitHub Actions typecheck/build/test).
+- [x] Cover PKCE, UUID state, callback-state validation, request construction, and response parsing through SDK-level flow tests; isolated unit tests for each helper remain optional follow-up work.
+- [x] Add integration tests against a mocked Auth Worker contract for SDK request/response behavior.
 - [ ] Test OAuth denial, missing code/state, state mismatch, expired/reused transaction, exchange failure, network failure, and browser cancellation.
 - [x] Add internal typed SDK error codes while preserving underlying causes; review usage consistency and public exposure policy.
 - [ ] Confirm no token, verifier, or raw session secret is logged or unnecessarily exposed.
