@@ -1,24 +1,21 @@
-# NinjaAuth — Roadmap and implementation status (dev)
+# NinjaAuth — Roadmap and implementation status
 
 > **Last reviewed:** 4 November 2026  
 > **Repository:** HanamiSoftware/NinjaAuth-SDK  
-> **Branch:** dev  
-> **Package/source version:** 0.1.0  
-> **Latest test-suite update:** commit 59f259ab9ef0c68a609775a1001245c42c95d189
+> **Branches verified:** `dev` and `master` — identical at commit `66a824ebecd355c5d1f7ae3b2943b0022bcb6eb1`  
+> **Package/source version:** v0.1.0  
 
-This roadmap is authoritative for the SDK **dev** branch only. It does not describe master. Dev and master are divergent. For the latest ahead/behind comparison, consult the central NinjaURL project roadmap. Do not transfer implementation or status claims between branches without review.
+This roadmap records the verified SDK state shared by `dev` and `master` at the commit identified above. The two branches are identical at that commit; future branch-specific changes must be checked before updating this shared status.
 
 ## Executive status
 
-The dev branch now exports the `NinjaAuth` class directly. Its public constructor returns one singleton instance within the current JavaScript runtime. The instance is initialized with `auth.init(config)`; the lifecycle methods are `auth.login()`, `auth.getSession()`, and `auth.logout()`.
+The SDK exports the `NinjaAuth` class directly. Its public constructor returns one singleton instance within the current JavaScript runtime. The instance is initialized with `auth.init(config)`; the lifecycle methods are `auth.login()`, `auth.getSession()`, and `auth.logout()`.
 
-The previous static-factory model (`NinjaAuth.init(config)`) is obsolete and has been removed from the documented public contract.
-
-The Extension dev branch imports the SDK class into its Background runtime, creates one instance with `new NinjaAuth()`, and initializes it once. The Extension's current Background also implements cache-first session restoration.
+The Extension Background on both `dev` and `master` imports the SDK class into its runtime, creates one instance with `new NinjaAuth()`, and initializes it once. The Extension's current Background also implements cache-first session restoration.
 
 ## Implemented SDK behavior
 
-| Area | Status on dev | Notes |
+| Area | Status on the shared branch state | Notes |
 |---|---|---|
 | Public export | Implemented | `export class NinjaAuth`; named export from `src/index.ts` |
 | Runtime singleton | Implemented in source | Public constructor returns the existing instance on repeated construction in the same runtime |
@@ -30,24 +27,22 @@ The Extension dev branch imports the SDK class into its Background runtime, crea
 | Current-session logout | Implemented in source | Credentialed POST /v1/logout; requires data.loggedOut === true |
 | Typed errors | Implemented in source | Configuration, initialization, network, response, exchange, session and cleanup errors |
 | Web login | Unsupported | Explicit UNSUPPORTED_PLATFORM rejection |
-| Version | Current source/package | 0.1.0; no public release or tag asserted |
+| Version | Current source/package | v0.1.0; no public release or tag asserted |
 
 ## Test status
 
-The previous 20-case test file called lifecycle methods on the exported class, which did not match the actual class/instance API.
-
-The test suite was rewritten and committed to dev:
+The test suite is present on both SDK branches:
 
 - File: `test/ninja-auth.test.mjs`.
 - Current suite: 37 top-level Node.js test cases.
 - Tests import the built ESM entry in isolated module instances so singleton state cannot leak between cases.
 - Coverage includes constructor identity, initialization, configuration validation, pre-init guards, session success/anonymous/error handling, logout confirmation, PKCE/state/exchange, cleanup behavior, and a mocked login → session → logout lifecycle.
 
-**Important:** the test code is prepared but has not yet been executed on the current dev commit. No passing test, typecheck, build, CI, or release-readiness claim is made.
+**Important:** the test code is prepared but has not yet been executed on the current shared commit. No passing test, typecheck, build, CI, or release-readiness claim is made.
 
 ## Extension integration status
 
-Repository: HanamiSoftware/NinjaUrl-Extension, branch dev.
+Repository: HanamiSoftware/NinjaUrl-Extension; the reviewed integration files are identical on `dev` and `master`.
 
 Verified source behavior:
 
@@ -66,8 +61,8 @@ The cache entry is presentation state, not proof of a live server session. Prote
 
 ### P0 — Run the automated SDK checks
 
-- [ ] Run `npm run typecheck` on the current dev head.
-- [ ] Run `npm run build` on the current dev head.
+- [ ] Run `npm run typecheck` on the current shared commit.
+- [ ] Run `npm run build` on the current shared commit.
 - [ ] Run `npm test` and resolve any failures.
 - [ ] Record exact commit and command output; do not infer success from the test file.
 
@@ -97,4 +92,4 @@ The cache entry is presentation state, not proof of a live server session. Prote
 
 ## Evidence policy
 
-A test file is not a passing test run. A green CI result on master is not evidence for dev. A manual smoke test is not equivalent to automated regression coverage or live Worker E2E. Record exact repository, branch, commit, environment, command, and result for every future verification.
+A test file is not a passing test run. A green CI result must be tied to the exact commit being evaluated. A manual smoke test is not equivalent to automated regression coverage or live Worker E2E. Record exact repository, branch, commit, environment, command, and result for every future verification.
