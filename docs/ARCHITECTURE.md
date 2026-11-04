@@ -32,7 +32,7 @@ NinjaAuth speaks the stable Ninja Connect API contract. It must not call AuthGea
 
 ## Current public SDK API
 
-~~~ts
+```ts
 NinjaAuth.init({
   clientId,
   redirectUri,
@@ -43,40 +43,26 @@ NinjaAuth.init({
 const user = await NinjaAuth.login();
 const session = await NinjaAuth.getSession();
 await NinjaAuth.logout();
-~~~
+```
 
-- login() starts interactive Authorization Code + PKCE.
-- getSession() observes the current server-side session and never starts interactive login.
-- logout() revokes the session identified by the current HttpOnly cookie.
+- `login()` starts interactive Authorization Code + PKCE.
+- `getSession()` observes the current server-side session and never starts interactive login.
+- `logout()` revokes the session identified by the current HttpOnly cookie.
 - Only an explicit 401 INVALID_SESSION is normalized to unauthenticated. Other errors remain distinguishable failures.
-- Chrome Extension login is implemented. Web login is explicitly unsupported and rejects with UNSUPPORTED_PLATFORM.
+- Chrome Extension login is implemented in source. Web login is explicitly unsupported and rejects with UNSUPPORTED_PLATFORM.
 
-The package metadata and runtime version constant currently remain 0.1.0. NinjaAuth v1.0.1-beta is the agreed internal milestone name, not yet a published package version. See the roadmap.
+The current package metadata and runtime source constant are both 0.1.0. The former `1.0.1-beta` milestone wording is superseded and must not be used as a package version or release claim.
 
 ## Extension integration
 
 The Chrome Extension uses the SDK from its Manifest V3 Background Service Worker.
 
 - The Background imports the vendored IIFE bundle with importScripts.
-- The Background initializes NinjaAuth with the registered Extension client ID, the Chrome Identity redirect URI, platform extension, and the development environment in the reviewed branch.
-- The Background adapts SDK results to Chrome runtime messages.
-- The Side Panel is a UI client; it sends RESTORE_SESSION, LOGIN, and LOGOUT messages and consumes normalized session data.
+- The Background initializes NinjaAuth and adapts SDK results to Chrome runtime messages.
+- The Side Panel is a UI client; it sends runtime messages and consumes normalized session data.
 - NinjaAuth and Ninja Connect own authentication and the central session. The Extension owns UI state and product-specific data.
 
-The integration is present on Extension master at commit 9606469a3f6412c5d47c9ee83c38b359499e1e8d. A cache-first restore optimization is present on Extension dev, two commits ahead of master on 3 November 2026.
-
-### Cache-first restore semantics — Extension dev
-
-The Background restoreSession() first reads the cached user from chrome.storage.local.
-
-- If a cached user exists, it returns an authenticated UI snapshot with that user and session null, without calling NinjaAuth getSession() or GET /v1/session.
-- If no cached user exists, it calls NinjaAuth getSession() and saves the user only for a valid authenticated response.
-- A temporary lookup failure is propagated and does not erase the cached user.
-- The Side Panel receives the result through RESTORE_SESSION.
-
-A cache hit restores the interface quickly; it is not proof that the server session is still valid. The authenticated flag in this cache-only response is a UI restoration hint. A null session means that no live session was checked in that call. A protected operation must obtain a fresh NinjaAuth session result before relying on authentication. That next-operation guard remains a release item.
-
-The cache stores the user profile, not the HttpOnly session secret. The server remains the authority for protected operations.
+The exact Extension branch and commit must be cited in the central project roadmap. Do not copy Extension branch status into this SDK architecture document as if it were SDK implementation evidence.
 
 ## Identity and authorization are separate
 
@@ -99,9 +85,7 @@ POST /v1/logout currently revokes only the session represented by the current co
 
 ## Concurrency and session invariants
 
-The Auth Worker has focused tests for three refresh/logout scenarios: stale concurrent refresh, logout while refresh operations are in flight, and logout committed before the resolver's final session revalidation.
-
-These tests use real PostgreSQL state and mocked upstream provider responses. They cover the specific orchestrated interleavings only; they are not live provider E2E tests or proof of every possible race.
+The Auth Worker has focused tests for refresh/logout scenarios. Their exact branch, commit, CI status, database, and provider-mocking boundaries are maintained in the central NinjaURL roadmap. These tests cover specific orchestrated interleavings only; they are not live provider E2E tests or proof of every possible race.
 
 ## Platform boundaries
 
