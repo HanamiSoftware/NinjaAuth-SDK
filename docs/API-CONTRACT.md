@@ -1,21 +1,17 @@
 # Ninja Connect Auth API — SDK/Worker Contract (dev)
 
-This document records the contract visible in SDK dev source and the current generated artifacts. The Auth Worker currently resides in [NinjaURL — Workers/auth-worker](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker). Verify its branch and commit independently before treating cross-repository behavior as current.
+This document records the public SDK contract visible in the dev source. The Auth Worker currently resides in [NinjaURL — Workers/auth-worker](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker). Verify its branch and commit independently before treating cross-repository behavior as current.
 
-## Public export shape on dev
+## Public export and singleton contract
 
-The current dev source exports the class `NinjaAuthClient` as `NinjaAuth`.
-
-- `NinjaAuth.init(config)` is static and returns the singleton instance.
-- `login()`, `getSession()`, and `logout()` are instance methods.
-- The ESM build exports the class, and the IIFE exposes the class on `window.NinjaAuth`.
-
-Correct usage for the current source shape:
+The package entry point exports the `NinjaAuth` class.
 
 ```ts
 import { NinjaAuth } from "@ninjaconnect/auth";
 
-const auth = NinjaAuth.init({
+const auth = new NinjaAuth();
+
+auth.init({
   clientId: "YOUR_CLIENT_ID",
   redirectUri: "YOUR_REGISTERED_REDIRECT_URI",
   platform: "extension",
@@ -27,18 +23,36 @@ const session = await auth.getSession();
 await auth.logout();
 ```
 
-Do not call `NinjaAuth.login()`, `NinjaAuth.getSession()`, or `NinjaAuth.logout()` directly on the exported class. Those methods are not static in the reviewed source.
+Contract:
 
-**Test mismatch:** the current test file invokes these instance methods on the class after calling init() without retaining the returned instance. This must be corrected and the suite executed before validation can be claimed.
+- The public constructor is callable.
+- Repeated construction in the same JavaScript runtime returns the same instance.
+- `init(config)` is an instance method and returns that instance.
+- Initialization is accepted once. A subsequent call throws `INITIALIZATION`.
+- `login()`, `getSession()`, and `logout()` are instance methods.
+- The singleton is not shared across separate JavaScript runtimes or extension contexts.
+- The old static API `NinjaAuth.init(config)` is not the public contract.
+
+The package entry point currently exports the types `NinjaAuthConfig` and `NinjaUser`. The method `getSession()` returns `NinjaSession`, but that type is not currently re-exported from `src/index.ts`; this is an API completeness item to decide and verify.
+
+## SDK methods
+
+| Method | Return | Behavior |
+|---|---|---|
+| `new NinjaAuth()` | `NinjaAuth` | Returns the runtime singleton instance |
+| `init(config)` | `NinjaAuth` | Validates configuration and initializes the instance once |
+| `login()` | `Promise<NinjaUser>` | Starts interactive Chrome Extension Authorization Code + PKCE |
+| `getSession()` | `Promise<NinjaSession>` | Observes the current server session; does not start login |
+| `logout()` | `Promise<void>` | Revokes the current cookie session and requires server confirmation |
 
 ## Worker routes
 
 | Method | Path | Purpose | SDK status |
 |---|---|---|---|
-| POST | /v1/exchange | Exchange authorization code and create the Ninja Connect session | Implemented in source; JSON request and data.user validation |
-| GET | /v1/session | Resolve current session; may refresh server-side | Implemented in source; normalized NinjaSession validation |
+| POST | /v1/exchange | Exchange authorization code and create the Ninja Connect session | Implemented |
+| GET | /v1/session | Resolve the current session; may refresh server-side | Implemented |
 | GET | /v1/user/me | Return current authenticated user | Worker route; not a separate SDK method |
-| POST | /v1/logout | Revoke the session identified by the current ninja_session cookie and clear that cookie | Implemented in source; requires explicit logout confirmation |
+| POST | /v1/logout | Revoke the session identified by the current ninja_session cookie and clear that cookie | Implemented |
 | POST (proposed, not implemented) | /v1/logout/all | Revoke all active sessions for the authenticated user | Not available; not an SDK method |
 
 The experimental POST /v1/state route is not part of the SDK flow. NinjaAuth creates and validates the OAuth transaction client-side and sends its UUID state in the exchange request.
@@ -49,7 +63,7 @@ The SDK sends JSON containing `state` (UUID), `code`, `client_id`, `code_verifie
 
 ## Scope and endpoints
 
-The source default scope is `openid profile email offline_access`. The dev generated IIFE also contains this full scope. Per-consumer custom scope configuration is future work.
+The source default scope is `openid profile email offline_access`. Per-consumer custom scope configuration is future work.
 
 | Environment | API base |
 |---|---|
@@ -93,4 +107,4 @@ Global logout at `POST /v1/logout/all` is proposed but not implemented. AuthGear
 
 ## Verification boundary
 
-The dev branch contains 20 top-level node:test cases, but the current test calls do not match the class/instance export shape described above. No test pass is asserted. Generated artifacts exist and the dev IIFE contains the full default scope; that does not establish that the API behavior is correct. Live Chrome/Worker cookie/CORS E2E remains unverified.
+The dev test suite has been updated to the constructor-singleton contract and contains 33 cases. It is test code, not a passing test result: execution on the current dev commit remains pending. Live Chrome/Worker cookie/CORS E2E and the Extension cache/protected-operation checks remain separate verification tasks.
