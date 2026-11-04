@@ -233,13 +233,23 @@ function isNinjaSession(value) {
   }
   return value.user === null && value.session === null;
 }
-var NinjaAuthClient = class {
+var _NinjaAuth = class _NinjaAuth {
   constructor() {
     this.config = null;
     this.version = VERSION;
+    if (_NinjaAuth.instance) {
+      return _NinjaAuth.instance;
+    }
+    _NinjaAuth.instance = this;
   }
   init(config) {
-    const supportedPlatforms = config?.platform ?? "extension";
+    if (this.config !== null) {
+      throw NinjaAuthErrorException(
+        "INITIALIZATION",
+        "NinjaAuth: SDK has already been initialized."
+      );
+    }
+    const supportedPlatforms = config.platform ?? "extension";
     if (supportedPlatforms !== "extension" && supportedPlatforms !== "web") {
       throw NinjaAuthErrorException(
         "CONFIGURATION",
@@ -271,6 +281,7 @@ var NinjaAuthClient = class {
       platform: supportedPlatforms,
       environment
     };
+    return this;
   }
   async login() {
     if (!this.ensureInitialized()) {
@@ -309,7 +320,7 @@ var NinjaAuthClient = class {
       redirectUri: this.config.redirectUri,
       codeChallenge: challenge,
       state,
-      scope: "openid offline_access"
+      scope: NINJA_CONNECT.DEFAULT_SCOPE
     });
     const transaction = {
       verifier,
@@ -542,7 +553,8 @@ var NinjaAuthClient = class {
     return result.data;
   }
 };
-var NinjaAuth = new NinjaAuthClient();
+_NinjaAuth.instance = null;
+var NinjaAuth = _NinjaAuth;
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   NinjaAuth

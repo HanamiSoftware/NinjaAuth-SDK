@@ -370,3 +370,4 @@ FodyWeavers.xsd
 /test/dist/index.global.js
 /test/dist/index.js.map
 /test/dist/index.cjs.map
+/.editorconfig

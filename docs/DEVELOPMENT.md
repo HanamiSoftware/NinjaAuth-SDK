@@ -1,14 +1,64 @@
-# NinjaAuth SDK — Development Guide
+# NinjaAuth SDK — Development Guide (dev)
 
-## Requirements
+## Requirements and commands
 
-The SDK is a TypeScript package built with tsup. Use a supported Node.js LTS release and npm.
+Use a supported Node.js LTS release and npm.
 
 ```bash
 npm install
+npm run typecheck
+npm run build
+npm test
 ```
 
-## SDK scripts
+- `typecheck`: TypeScript validation without emitting output.
+- `build`: creates the package artifacts.
+- `test`: runs the Node.js built-in test runner against `test/*.test.mjs`.
+
+Run the commands from the SDK repository root. Record the exact branch and commit alongside the results. A test file being present is not evidence that it passed.
+
+## Public API and singleton lifecycle
+
+The public entry point exports the `NinjaAuth` class:
+
+```ts
+import { NinjaAuth } from "@ninjaconnect/auth";
+
+const auth = new NinjaAuth();
+
+auth.init({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "YOUR_REGISTERED_REDIRECT_URI",
+  platform: "extension",
+  environment: "development",
+});
+
+await auth.login();
+const session = await auth.getSession();
+await auth.logout();
+```
+
+The public constructor returns the same instance for repeated construction in the same JavaScript runtime. `init()` is an instance method, returns `this`, and may be called only once. A repeated initialization fails with `INITIALIZATION`.
+
+Do not use the former static form `NinjaAuth.init(config)`. The Extension Background currently creates the instance with `new NinjaAuth()` and initializes it once.
+
+## Test workflow
+
+The automated suite lives in `test/ninja-auth.test.mjs`. It uses isolated module instances so the singleton state of one test cannot contaminate another. Chrome identity/storage and Worker HTTP responses are mocked at their boundaries.
+
+The suite currently contains 37 test cases covering:
+
+- Export shape, constructor singleton identity, initialization and configuration validation.
+- Calls made before initialization and unsupported web login.
+- Authenticated and anonymous session responses.
+- The distinction between `INVALID_SESSION` and operational errors.
+- Network and malformed-response handling.
+- Current-session logout and its confirmation contract.
+- Authorization Code + PKCE, state validation, cancellation and exchange failures.
+- Transaction cleanup, including preservation of the primary error.
+- A complete mocked login → session lookup → logout sequence.
+
+Run:
 
 ```bash
 npm run typecheck
@@ -16,60 +66,33 @@ npm run build
 npm test
 ```
 
-- `typecheck`: runs TypeScript without emitting output.
-- `build`: creates ESM, CJS, declaration files, and the IIFE bundle via tsup.
-- `test`: runs the Node.js built-in test runner against `test/*.test.mjs`. Tests import the built ESM artifact, so build before running the suite when source changes have not yet been built.
-
-The master test file contains 20 top-level test cases and uses mocked Chrome extension APIs and mocked Auth Worker HTTP responses. This is test coverage evidence only; it does not mean the tests passed on every commit. These tests are not live end-to-end tests against a deployed Worker or identity-provider tenant.
-
-## Suggested SDK workflow
-
-1. Read Architecture and API contract.
-2. Run `npm run typecheck`.
-3. Add a focused test for each behavior change.
-4. Run `npm run build`.
-5. Run `npm test`.
-6. Inspect generated declarations, ESM/CJS output, and IIFE bundle when public API or protocol behavior changes.
-7. Update Roadmap and the relevant technical document.
-8. For cross-repository changes, record the exact SDK, Extension, and Worker commits used.
+The suite was updated on dev, but it has not yet been executed on the resulting commit. Do not report it as passing until the commands have been run and their output reviewed.
 
 ## Environment configuration
 
-- development: `http://127.0.0.1:8787/v1` for the local Ninja Connect Auth Worker.
-- production: `https://auth.ninjaconnect.io/v1`.
+- `development`: `http://127.0.0.1:8787/v1`.
+- `production`: `https://auth.ninjaconnect.io/v1`.
 - The SDK defaults to production; local development must opt into `environment: "development"`.
 - The authorization origin remains `https://auth.ninjaconnect.io`.
 
 Do not change Worker ports, CORS, cookie attributes, or deployment configuration without reviewing the corresponding Worker setup and consulting the project owner.
 
-## Chrome Extension integration
+## Extension and Worker integration
 
-The NinjaURL Extension loads the SDK IIFE in its classic Manifest V3 Background Service Worker through `importScripts`. The Background owns SDK initialization and translates SDK results into runtime messages. The Side Panel remains a UI client and must not implement OAuth or call Auth Worker session routes directly.
+The Extension Background owns SDK initialization and translates SDK results into Chrome runtime messages. The Side Panel remains a UI client and must not implement OAuth or call Auth Worker session routes directly.
 
-Extension branch status is maintained in the central NinjaURL roadmap. Do not assume Extension master and dev contain the same integration behavior.
+A user cached in `chrome.storage.local` can restore the interface quickly, but it is presentation state, not proof of a currently valid server session. Protected operations must require a live session check. Temporary lookup failures must remain errors and must not be converted into an anonymous state or silently clear a cached user.
 
-### Cache-first restore security rule
+The Auth Worker currently resides in [NinjaURL-URL-Shortener/Workers/auth-worker](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker).
 
-A cached user may restore the UI immediately, but it is not an authorization credential. A null session means that no live session was checked in that call. Before any protected operation, verify the live session with NinjaAuth. Temporary lookup failures must remain errors and must not silently become anonymous state.
+## Remaining validation
 
-## Cross-repository verification
+- [ ] Run typecheck, build, and all 37 automated tests on the exact dev commit.
+- [ ] Review the public type exports, including whether `NinjaSession` should be exported from the package entry point.
+- [ ] Complete Chrome/Worker tests for cookies, CORS, cache restore, and protected-operation checks.
+- [ ] Record the exact SDK, Extension, and Worker commits used for end-to-end validation.
+- [ ] Complete security review before any release decision.
 
-The Auth Worker currently lives in [NinjaURL-URL-Shortener/Workers/auth-worker](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker). Its transfer to a dedicated Ninja Connect repository has not been completed.
+## Release discipline
 
-When verifying backend concurrency behavior, record whether PostgreSQL is real or mocked and whether the upstream identity provider is live or simulated. RT-001/RT-002/RT-003 are focused PostgreSQL integration tests with mocked upstream provider responses, not live provider E2E.
-
-## Version and release discipline
-
-The package metadata and runtime source constant currently report **0.1.0**. Do not use the former `1.0.1-beta` wording as a release milestone or package version.
-
-Before publishing any future package:
-
-- [ ] Agree explicitly on the target package version.
-- [ ] Run typecheck, tests, and build on the exact release commit.
-- [ ] Verify version and default scope in ESM, CJS, declarations, and IIFE output.
-- [ ] Compare any vendored consumer bundle against the generated artifact.
-- [ ] Build and load the Extension in Chrome.
-- [ ] Verify login, session restoration, logout, login again, cookie/CORS behavior, and temporary failures.
-- [ ] Confirm documentation, package metadata, source version, and distributed artifacts describe the same commit.
-
-Do not claim a release or CI success unless the exact commit and run provide evidence.
+The package and runtime source version are 0.1.0. No public release or tag is asserted. Agree explicitly on a future version before publishing.

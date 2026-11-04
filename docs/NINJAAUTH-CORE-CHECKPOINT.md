@@ -1,42 +1,24 @@
-# Historical checkpoint — NinjaAuth Core 0.1.0
+# Historical checkpoint — NinjaAuth Core 0.1
 
-> **Historical document.** This checkpoint was written on 3 November 2026 and is retained for decision history only. It is not the current status source; see [ROADMAP.md](ROADMAP.md).
+> This document records decisions and working notes from 1 November 2026. It is not the live implementation status source. Use [the dev roadmap](ROADMAP.md).
 
-## Version correction
+## Stable architecture decisions
 
-The package metadata and source runtime constant are 0.1.0. The former title and references to `1.0.1-beta` were erroneous and are superseded. No 1.0.1-beta package version, release tag, or agreed milestone is asserted.
+- Ninja Connect is the Identity Broker for shared identity and central session lifecycle.
+- NinjaAuth is a provider-neutral client SDK.
+- Each consuming application owns its profiles, roles, permissions, capabilities, and business rules.
+- AuthGear remains an upstream provider behind Ninja Connect.
+- The client does not read or persist raw HttpOnly session secrets.
+- getSession() observes the existing session and does not start interactive login.
+- Only explicit INVALID_SESSION becomes unauthenticated; temporary failures remain errors.
+- Web login remains unsupported until designed and implemented.
 
-## Snapshot recorded at the time
+## Historical development notes
 
-The checkpoint described the following source implementation:
+The original checkpoint described ongoing work on PKCE, OAuth state, callback handling, exchange contracts, session lookup, logout, typed errors, and backend concurrency tests. Those notes were a snapshot of the work reported at the time and must not be used to infer current branch implementation or test status.
 
-- init(): configuration with client ID, redirect URI, platform, and environment.
-- login(): Authorization Code + PKCE for Chrome Extension.
-- UUID state and callback-state equality validation.
-- JSON exchange conforming to the documented Worker contract.
-- Default scope read from NINJA_CONNECT.DEFAULT_SCOPE.
-- getSession(): observation of the existing session and distinction between anonymous state and operational errors.
-- logout(): current-session revocation through POST /v1/logout.
-- Typed internal errors, including TRANSACTION_CLEANUP_FAILED.
-- SDK node:test suite with 20 top-level cases.
+## Current source of truth
 
-This is a historical inventory, not a claim that every check passed on the current branch or commit.
+The current dev branch export shape, package version, generated artifacts, test/API mismatch, and remaining validation tasks are documented in [ROADMAP.md](ROADMAP.md). The API contract is in [API-CONTRACT.md](API-CONTRACT.md).
 
-## Architecture decisions retained
-
-- Ninja Connect is the broker for shared identity and session.
-- NinjaAuth is the client SDK, not the owner of application profiles.
-- Each product maintains its own profiles, roles, permissions, capabilities, and business rules.
-- AuthGear is an upstream provider behind Ninja Connect.
-- The session cookie is HttpOnly; the client does not read or persist the secret.
-- getSession() does not start interactive login.
-- Only explicit 401 INVALID_SESSION becomes unauthenticated; temporary failures remain errors.
-- Web login is not implemented and must fail explicitly.
-
-## Verification limits
-
-- A test file containing 20 cases is not evidence that the suite passed on a particular commit.
-- The Extension build, Chrome runtime flow, and live cookie/CORS E2E require separate verification.
-- Focused PostgreSQL tests with a mocked provider are not live identity-provider E2E.
-
-For current branch state, release gates, and evidence, use [the roadmap](ROADMAP.md).
+No release readiness or passing test result is claimed by this historical checkpoint.

@@ -1,97 +1,93 @@
-# NinjaAuth — Roadmap and implementation status
+# NinjaAuth — Roadmap and implementation status (dev)
 
 > **Last reviewed:** 4 November 2026  
 > **Repository:** HanamiSoftware/NinjaAuth-SDK  
-> **Branch reviewed:** master  
-> **Reviewed commit:** `31116ff9609aaf7ce1a6fb137a54f401a91b1635`  
-> **Package/source version:** `0.1.0`
+> **Branch:** dev  
+> **Package/source version:** 0.1.0  
+> **Latest test-suite update:** commit 59f259ab9ef0c68a609775a1001245c42c95d189
 
-This document is the single authoritative implementation-status record for the SDK repository. Branch-specific statements must not be generalized to other branches or repositories.
+This roadmap is authoritative for the SDK **dev** branch only. It does not describe master. Dev and master are divergent. For the latest ahead/behind comparison, consult the central NinjaURL project roadmap. Do not transfer implementation or status claims between branches without review.
 
 ## Executive status
 
-NinjaAuth 0.1.0 has a substantive Chrome Extension authentication/session implementation in source: initialization, Authorization Code + PKCE, callback-state validation, JSON code exchange, session lookup, and current-session logout. A Node.js test file with 20 top-level test cases is present.
+The dev branch now exports the `NinjaAuth` class directly. Its public constructor returns one singleton instance within the current JavaScript runtime. The instance is initialized with `auth.init(config)`; the lifecycle methods are `auth.login()`, `auth.getSession()`, and `auth.logout()`.
 
-**Release readiness is not established.** The current committed IIFE bundle does not match the source default authorization scope. The exact reviewed master commit has not been shown here to have a successful CI run or a fresh local validation run. Chrome/Worker live end-to-end verification is also open.
+The previous static-factory model (`NinjaAuth.init(config)`) is obsolete and has been removed from the documented public contract.
 
-The phrase `1.0.1-beta` appearing in older documents was not an agreed package version or valid release milestone. It is superseded. The actual package metadata and runtime source constant are both `0.1.0`; no public release or tag is claimed.
+The Extension dev branch imports the SDK class into its Background runtime, creates one instance with `new NinjaAuth()`, and initializes it once. The Extension's current Background also implements cache-first session restoration.
 
-## Branch boundary
+## Implemented SDK behavior
 
-At review time, GitHub compare reported the SDK branches as diverged:
-
-- `master` was 9 commits ahead of `dev`.
-- `dev` was 29 commits ahead of `master`.
-- The merge base was `d2b7ea44dcd769fcb3ce3cb145d737f657e55150`.
-- The reviewed master head was `31116ff9609aaf7ce1a6fb137a54f401a91b1635`.
-
-The branches must be audited and documented independently. This roadmap describes **master** unless a different branch is explicitly named.
-
-## Architecture decisions
-
-- Ninja Connect is the central Identity Broker for shared authentication, identity, and session lifecycle.
-- NinjaAuth is a client SDK usable by first-party products and independent applications.
-- Ninja Connect owns shared identity and central session management; each consuming application owns its business authorization.
-- Product-specific profiles, roles, permissions, capabilities, and business rules do not belong in the shared identity contract.
-- AuthGear is the current upstream identity provider behind Ninja Connect, not a public SDK dependency.
-- `login()` starts interactive authentication; `getSession()` observes the existing session and never starts login.
-- Only an explicit `401 INVALID_SESSION` is normalized to unauthenticated. Other authorization errors, malformed responses, network failures, and temporary refresh failures remain errors.
-- Browser JavaScript must not read or persist the raw HttpOnly session secret or upstream refresh token.
-- `POST /v1/logout` revokes the current cookie session; global logout is not implemented.
-- The optional `NinjaAppAdapter<TProfile>` is not claimed as an exported API.
-
-## Master implementation status
-
-| Area | Status on master | Evidence / qualification |
+| Area | Status on dev | Notes |
 |---|---|---|
-| Initialization | Implemented | Validates client ID, redirect URI, platform, and environment |
-| Chrome Extension login | Implemented in source | Authorization Code + PKCE S256, UUID state, callback-state equality check |
-| Code exchange | Implemented in source | JSON body includes state, code, client_id, code_verifier, redirect_uri |
-| Default scope | Implemented in source | `openid profile email offline_access` |
+| Public export | Implemented | `export class NinjaAuth`; named export from `src/index.ts` |
+| Runtime singleton | Implemented in source | Public constructor returns the existing instance on repeated construction in the same runtime |
+| Initialization | Implemented in source | Instance method; validates configuration; one-shot; returns `this` |
+| Chrome Extension login | Implemented in source | Authorization Code + PKCE S256 |
+| OAuth state | Implemented in source | UUID state and callback equality validation |
+| Code exchange | Implemented in source | JSON request with state, code, client_id, code_verifier, redirect_uri |
 | Session lookup | Implemented in source | Validates normalized NinjaSession; only explicit 401 INVALID_SESSION becomes anonymous |
-| Current-session logout | Implemented in source | Credentialed POST /v1/logout; requires `data.loggedOut === true` |
-| Web login | Unsupported | Explicit `UNSUPPORTED_PLATFORM` rejection |
-| SDK tests | Test file present | 20 top-level node:test cases; this is not evidence that they passed on the reviewed commit |
-| Generated IIFE | Out of sync | `dist/index.global.js` authorization request still uses `openid offline_access` |
-| CI / release validation | Not established here | No passing status or local test run is asserted for reviewed commit |
-| Live Extension/Worker E2E | Not verified | Chrome login/session/logout and cookie/CORS lifecycle remain open |
+| Current-session logout | Implemented in source | Credentialed POST /v1/logout; requires data.loggedOut === true |
+| Typed errors | Implemented in source | Configuration, initialization, network, response, exchange, session and cleanup errors |
+| Web login | Unsupported | Explicit UNSUPPORTED_PLATFORM rejection |
+| Version | Current source/package | 0.1.0; no public release or tag asserted |
 
-## Version and distribution
+## Test status
 
-Verified on master:
+The previous 20-case test file called lifecycle methods on the exported class, which did not match the actual class/instance API.
 
-- `package.json` version: `0.1.0`.
-- `src/NinjaAuth.ts` runtime version constant: `0.1.0`.
-- `src/config.ts` default scope: `openid profile email offline_access`.
-- `dist/index.global.js` contains the older reduced authorization scope `openid offline_access`.
+The test suite was rewritten and committed to dev:
 
-The generated artifact must be rebuilt and inspected. Do not publish or tag a new version until package metadata, source, ESM/CJS/declarations/IIFE artifacts, and any consuming application's vendored bundle are verified against the same release commit.
+- File: `test/ninja-auth.test.mjs`.
+- Current suite: 37 top-level Node.js test cases.
+- Tests import the built ESM entry in isolated module instances so singleton state cannot leak between cases.
+- Coverage includes constructor identity, initialization, configuration validation, pre-init guards, session success/anonymous/error handling, logout confirmation, PKCE/state/exchange, cleanup behavior, and a mocked login → session → logout lifecycle.
 
-## Remaining work
+**Important:** the test code is prepared but has not yet been executed on the current dev commit. No passing test, typecheck, build, CI, or release-readiness claim is made.
 
-### P0 — Align and verify distribution artifacts
+## Extension integration status
 
-- [ ] Run the documented typecheck, build, and test commands on the exact candidate commit.
-- [ ] Rebuild all distribution artifacts from the reviewed source.
-- [ ] Verify the default scope and version in ESM, CJS, declarations, and IIFE output.
-- [ ] Compare the Extension vendored IIFE with the generated artifact before updating it.
+Repository: HanamiSoftware/NinjaUrl-Extension, branch dev.
 
-### P0 — Complete Extension/Worker end-to-end verification
+Verified source behavior:
 
-- [ ] Build and load the Extension in Chrome.
-- [ ] Verify clean install, login, session lookup, logout, and login again.
+- Background loads the NinjaAuth class into its Service Worker runtime.
+- Background creates one instance and initializes it with the Extension client ID, Chrome redirect URI, platform `extension`, and environment `development`.
+- Login delegates to SDK login, then calls getSession and persists the authenticated user in `chrome.storage.local`.
+- Restore checks the local cached user first. A cache hit returns a UI-restoration result with `session: null` and does not call the server in that path.
+- If no cached user exists, restore calls SDK getSession; an authenticated user is cached.
+- Logout calls SDK logout before clearing the cached user.
+
+The project owner reports successful manual checks of login, logout, server-side session recovery, and local-storage session restoration. This is recorded as a manual smoke-test report, not as automated or CI evidence.
+
+The cache entry is presentation state, not proof of a live server session. Protected operations still require an explicit live session check. The exact protected-operation guard and its tests remain to be reviewed.
+
+## Remaining work — priority order
+
+### P0 — Run the automated SDK checks
+
+- [ ] Run `npm run typecheck` on the current dev head.
+- [ ] Run `npm run build` on the current dev head.
+- [ ] Run `npm test` and resolve any failures.
+- [ ] Record exact commit and command output; do not infer success from the test file.
+
+### P0 — Complete integration/security checks
+
+- [ ] Verify Extension login, session restore, logout, and login-again in Chrome.
 - [ ] Verify HttpOnly cookie creation, retention, credentialed requests, and clearing.
 - [ ] Verify Extension origin against Worker CORS configuration.
-- [ ] Verify temporary network/Worker failures remain errors and do not become anonymous state.
+- [ ] Verify cache hit does not call /v1/session.
+- [ ] Verify cache miss calls /v1/session and caches only a valid authenticated user.
+- [ ] Verify transient server failures do not become anonymous state or erase a cached user.
+- [ ] Verify every protected operation requires a live session when the cache result has `session: null`.
 
-### P1 — Finalize the public contract
+### P1 — Public API completeness and hardening
 
-- [ ] Review transaction storage validation and all OAuth failure/cleanup paths.
-- [ ] Confirm tokens, verifier, and raw session secrets are not logged or unnecessarily exposed.
+- [ ] Decide whether `NinjaSession` and other consumer-facing types should be re-exported from `src/index.ts`. Current index exports `NinjaAuthConfig` and `NinjaUser` only.
+- [ ] Review behavior when logout is requested for an already anonymous session.
+- [ ] Review transaction storage validation and cleanup failure paths.
+- [ ] Confirm verifier, tokens, and raw session secrets are never logged or unnecessarily exposed.
 - [ ] Review upstream provider revocation reporting after local logout.
-- [ ] Define behavior for already-anonymous logout and partial upstream revocation failure.
-- [ ] Finalize public types, singleton/instance policy, timeout, and cancellation semantics.
-- [ ] Keep Web login explicitly unsupported until its platform design and browser tests are complete.
 
 ### P2 — Future scope
 
@@ -99,10 +95,6 @@ The generated artifact must be rebuilt and inspected. Do not publish or tag a ne
 - Web platform adapter and browser-level tests.
 - Account linking, MFA, passkeys, device management, and global logout.
 
-## Cross-repository boundary
-
-The Auth Worker currently resides in [NinjaURL-URL-Shortener/Workers/auth-worker](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker). Its transfer to a dedicated Ninja Connect repository is not complete. Worker and Extension implementation status is owned by the central NinjaURL roadmap and the relevant repository evidence; do not infer it from SDK source.
-
 ## Evidence policy
 
-A test file is not a passing test run. A green CI run on one branch is not evidence for another branch. A focused PostgreSQL concurrency test with a mocked upstream provider is not live provider E2E. Every future status update must name the exact commit and verification boundary.
+A test file is not a passing test run. A green CI result on master is not evidence for dev. A manual smoke test is not equivalent to automated regression coverage or live Worker E2E. Record exact repository, branch, commit, environment, command, and result for every future verification.

@@ -82,60 +82,77 @@ function isNinjaSession(
     return value.user === null && value.session === null;
 }
 
-class NinjaAuthClient {
+export class NinjaAuth {
 
     private config: NinjaAuthConfig | null = null;
 
     public readonly version = VERSION;
+    private static instance: NinjaAuth | null = null;
 
-
-    public init(config: NinjaAuthConfig): void {
-
-        const supportedPlatforms = config?.platform ?? "extension";
-
-        if (
-            supportedPlatforms !== "extension" &&
-            supportedPlatforms !== "web"
-        ) {
-            throw NinjaAuthErrorException(
-                "CONFIGURATION",
-                "NinjaAuth: platform must be 'extension' or 'web'."
-            );
-        }
-
-        if (!config.clientId) {
-            throw NinjaAuthErrorException(
-                "CONFIGURATION",
-                "NinjaAuth: clientId is required."
-            );
-        }
-
-        if (!config.redirectUri) {
-            throw NinjaAuthErrorException(
-                "CONFIGURATION",
-                "NinjaAuth: redirectUri is required."
-            );
-        }
-
-        const environment = config.environment ?? "production";
-
-        if (
-            environment !== "development" &&
-            environment !== "production"
-        ) {
-            throw NinjaAuthErrorException(
-                "CONFIGURATION",
-                "NinjaAuth: environment must be 'development' or 'production'."
-            );
-        }
-
-        this.config = {
-            clientId: config.clientId,
-            redirectUri: config.redirectUri,
-            platform: supportedPlatforms,
-            environment
-        };
+    public constructor() {
+    if (NinjaAuth.instance) {
+      return NinjaAuth.instance;
     }
+    NinjaAuth.instance = this;
+  }
+				
+
+    public init(config: NinjaAuthConfig): NinjaAuth {
+
+    if (this.config !== null) {
+        throw NinjaAuthErrorException(
+            "INITIALIZATION",
+            "NinjaAuth: SDK has already been initialized."
+        );
+    }
+
+    const supportedPlatforms = config.platform ?? "extension";
+
+    if (
+        supportedPlatforms !== "extension" &&
+        supportedPlatforms !== "web"
+    ) {
+        throw NinjaAuthErrorException(
+            "CONFIGURATION",
+            "NinjaAuth: platform must be 'extension' or 'web'."
+        );
+    }
+
+    if (!config.clientId) {
+        throw NinjaAuthErrorException(
+            "CONFIGURATION",
+            "NinjaAuth: clientId is required."
+        );
+    }
+
+    if (!config.redirectUri) {
+        throw NinjaAuthErrorException(
+            "CONFIGURATION",
+            "NinjaAuth: redirectUri is required."
+        );
+    }
+
+    const environment = config.environment ?? "production";
+
+    if (
+        environment !== "development" &&
+        environment !== "production"
+    ) {
+        throw NinjaAuthErrorException(
+            "CONFIGURATION",
+            "NinjaAuth: environment must be 'development' or 'production'."
+        );
+    }
+
+    this.config = {
+        clientId: config.clientId,
+        redirectUri: config.redirectUri,
+        platform: supportedPlatforms,
+        environment
+    };
+
+    return this;
+}
 
 
     public async login(): Promise<NinjaUser> {
@@ -501,6 +518,7 @@ class NinjaAuthClient {
         );
     }
 
+
     if (!isNinjaSession(result.data)) {
         throw NinjaAuthErrorException(
             "INVALID_RESPONSE",
@@ -513,6 +531,4 @@ class NinjaAuthClient {
 }
 }
 
-
-export const NinjaAuth =
-    new NinjaAuthClient();
+export default NinjaAuth;
