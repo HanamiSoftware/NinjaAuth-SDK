@@ -61,7 +61,7 @@ The cache entry is presentation state, not proof of a live server session. Prote
 
 ### P0 — Run the automated SDK checks
 
-- [ ] Run `npm run typecheck` on the current dev head.
+- [ ] Run `npm run typecheck` on the current shared commit.
 - [ ] Run `npm run build` on the current dev head.
 - [ ] Run `npm test` and resolve any failures.
 - [ ] Record exact commit and command output; do not infer success from the test file.
