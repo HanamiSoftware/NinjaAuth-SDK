@@ -2,10 +2,10 @@
 
 > **Last reviewed:** 4 November 2026  
 > **Repository:** HanamiSoftware/NinjaAuth-SDK  
-> **Branches verified:** `dev` and `master` — identical at commit `66a824ebecd355c5d1f7ae3b2943b0022bcb6eb1`  
+> **Branches checked:** `dev` at `a8e79dceea72cbc8c2b0c69f897ec42c9e0ce9d4`; `master` at `96ff24ed380713ac08d9d78176f0636f69444b92`  
 > **Package/source version:** v0.1.0  
 
-This roadmap records the verified SDK state shared by `dev` and `master` at the commit identified above. The two branches are identical at that commit; future branch-specific changes must be checked before updating this shared status.
+This roadmap records the verified SDK implementation and validation evidence. The SDK source/test tree validated by CI is present in the history of both branches; `dev` additionally contains the `workflow_dispatch` trigger in `.github/workflows/sdk-ci.yml`, which is not yet present on `master`.
 
 ## Executive status
 
@@ -38,7 +38,7 @@ The test suite is present on both SDK branches:
 - Tests import the built ESM entry in isolated module instances so singleton state cannot leak between cases.
 - Coverage includes constructor identity, initialization, configuration validation, pre-init guards, session success/anonymous/error handling, logout confirmation, PKCE/state/exchange, cleanup behavior, and a mocked login → session → logout lifecycle.
 
-**Important:** the test code is prepared but has not yet been executed on the current shared commit. No passing test, typecheck, build, CI, or release-readiness claim is made.
+**Validation passed on 4 November 2026:** GitHub Actions run [#25](https://github.com/HanamiSoftware/NinjaAuth-SDK/actions/runs/41863128345) completed successfully on `dev`, commit `a8e79dceea72cbc8c2b0c69f897ec42c9e0ce9d4`. The job completed all steps successfully: dependency installation (`npm ci`), `npm run typecheck`, `npm run build`, and `npm test` (37 tests, 37 passed, 0 failed). The commit adds the workflow trigger; the SDK source and test implementation are inherited unchanged from its parent `e9951747e0adcde36b1296ed1981642e7d922808`. This evidence is specific to the `dev` run; it does not claim that `master` has the updated workflow or a separate run on its own current head.
 
 ## Extension integration status
 
@@ -59,12 +59,13 @@ The cache entry is presentation state, not proof of a live server session. Prote
 
 ## Remaining work — priority order
 
-### P0 — Run the automated SDK checks
+### P0 — Automated SDK checks
 
-- [ ] Run `npm run typecheck` on the current shared commit.
-- [ ] Run `npm run build` on the current shared commit.
-- [ ] Run `npm test` and resolve any failures.
-- [ ] Record exact commit and command output; do not infer success from the test file.
+- [x] `npm run typecheck` passed in GitHub Actions on `dev` commit `a8e79dceea72cbc8c2b0c69f897ec42c9e0ce9d4`.
+- [x] `npm run build` passed on the same run.
+- [x] `npm test` passed: 37 tests, 37 passed, 0 failed.
+- [x] Evidence recorded in [SDK CI run #25](https://github.com/HanamiSoftware/NinjaAuth-SDK/actions/runs/41863128345).
+- [ ] Run or confirm equivalent validation against `master` after branch synchronization, if required by the release process.
 
 ### P0 — Complete integration/security checks
 
