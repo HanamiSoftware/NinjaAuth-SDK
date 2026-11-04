@@ -136,10 +136,17 @@ test("the public constructor returns the same singleton instance", async () => {
     assert.ok(second instanceof NinjaAuth);
 });
 
-test("init returns the singleton instance", async () => {
-    const { auth } = await initialize();
+test("init returns this singleton instance", async () => {
+    const { NinjaAuth, auth } = await createClient();
 
-    assert.strictEqual(auth.init, auth.init);
+    const initialized = auth.init({
+        clientId: "test-client",
+        redirectUri: "https://example.com/callback",
+        environment: "development"
+    });
+
+    assert.strictEqual(initialized, auth);
+    assert.ok(initialized instanceof NinjaAuth);
 });
 
 test("init rejects a second initialization", async () => {
@@ -204,7 +211,7 @@ test("init rejects an unsupported environment", async () => {
     );
 });
 
-test("init defaults platform to extension and environment to production", async () => {
+test("init defaults the environment to production", async () => {
     const { auth } = await createClient();
 
     auth.init({
