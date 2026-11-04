@@ -10,6 +10,7 @@ This directory documents the SDK implementation on the branch being reviewed. Th
 | [API contract](API-CONTRACT.md) | SDK ↔ Worker request/response contract and public API shape |
 | [Architecture](ARCHITECTURE.md) | Stable responsibility boundaries and architectural decisions |
 | [Development guide](DEVELOPMENT.md) | Local workflow and validation commands |
+| [Test plan](TEST-PLAN.md) | Automated regression coverage and Chrome/Worker integration matrix |
 | [Core checkpoint](NINJAAUTH-CORE-CHECKPOINT.md) | Historical snapshot; not a live status source |
 
 ## Documentation rules
@@ -18,7 +19,7 @@ This directory documents the SDK implementation on the branch being reviewed. Th
 - Distinguish **implemented**, **test present**, **test executed**, **verified in a scenario**, and **not verified**.
 - A test file or a CI workflow is not evidence of a passing run.
 - Inspect source and generated artifacts separately.
-- Document public API behavior exactly as exported; do not copy an intended API shape over an implementation mismatch.
+- Document public API behavior exactly as exported; the current dev API is the constructor-enforced singleton class, not the former static init factory.
 - Keep master and dev status separate. The branches are divergent.
 - The package and runtime source version are 0.1.0. Do not use the former 1.0.1-beta wording as a milestone or version.
 
