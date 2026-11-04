@@ -6,7 +6,7 @@
 > **Package/source version:** 0.1.0  
 > **Latest test-suite update:** commit 4caa4a42cdc246765a3944ec85b62118a9b3caaa
 
-This roadmap is authoritative for the SDK **dev** branch only. It does not describe master. At the last branch comparison, dev and master were divergent: dev was 39 commits ahead and 19 behind master. Do not transfer implementation or status claims between branches without review.
+This roadmap is authoritative for the SDK **dev** branch only. It does not describe master. At the last branch comparison, dev and master were divergent: dev was 48 commits ahead and 19 behind master. Do not transfer implementation or status claims between branches without review.
 
 ## Executive status
 
