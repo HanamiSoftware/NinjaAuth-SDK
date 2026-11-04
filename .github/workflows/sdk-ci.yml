@@ -10,7 +10,8 @@ on:
       - "package-lock.json"
       - "tsconfig.json"
       - "tsup.config.ts"
-
+  workflow_dispatch:
+    
 permissions:
   contents: read
 
