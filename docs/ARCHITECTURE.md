@@ -2,7 +2,7 @@
 
 ## Purpose
 
-NinjaAuth is the client SDK for integrating applications with Ninja Connect, the central identity and session service. It is designed for first-party Ninja products and independent third-party applications. Its public API must remain independent from the upstream identity provider configured behind Ninja Connect.
+NinjaAuth is the client SDK for integrating applications with Ninja Connect, the central identity and session service. It is designed for first-party Ninja products and independent third-party applications. Its public API remains independent from the upstream identity provider configured behind Ninja Connect.
 
 ## Responsibility boundaries
 
@@ -22,21 +22,25 @@ Each application owns its own profile, preferences, roles, permissions, capabili
 
 ### Upstream provider boundary
 
-AuthGear is the current upstream identity provider behind Ninja Connect. It is not a public SDK dependency. NinjaAuth must speak the Ninja Connect API and must not call AuthGear endpoints directly or receive provider secrets. OIDC Discovery/interoperability remains future work.
+AuthGear is the current upstream identity provider behind Ninja Connect. It is not a public SDK dependency. NinjaAuth speaks the Ninja Connect API and must not call AuthGear endpoints directly or receive provider secrets. OIDC Discovery/interoperability remains future work.
 
-## Actual dev export shape
+## Public instance model
 
-The reviewed dev source exports `NinjaAuthClient` as `NinjaAuth`.
+The package exports the `NinjaAuth` class. Its public constructor enforces a singleton instance within one JavaScript runtime:
 
-- Static `NinjaAuth.init(config)` creates or returns the singleton client instance.
-- The returned instance owns `login()`, `getSession()`, and `logout()`.
-- The ESM and IIFE outputs expose the class, not an already-created client instance.
+- The first `new NinjaAuth()` creates the instance.
+- Further `new NinjaAuth()` calls return the same instance.
+- `init(config)` is an instance method, validates the configuration, and returns `this`.
+- Initialization is one-shot; a second call fails with `INITIALIZATION`.
+- `login()`, `getSession()`, and `logout()` operate on that initialized instance.
 
-This API shape must be kept distinct from the older singleton-object example. The current test file uses the lifecycle methods as if they were static, so the source, test setup, and public API example are not yet aligned.
+This is a runtime-local singleton, not a cross-context singleton. Separate extension pages and the Background Service Worker have separate JavaScript runtimes and therefore separate in-memory instances.
+
+The Extension Background owns its instance and initialization. UI surfaces communicate with the Background rather than constructing competing authentication clients.
 
 ## Authentication and session behavior
 
-- Chrome Extension Authorization Code + PKCE is implemented in source.
+- Chrome Extension Authorization Code + PKCE is implemented.
 - PKCE uses S256; OAuth state is a UUID and callback state is checked against the initiating transaction.
 - Code exchange sends JSON with state, code, client_id, code_verifier, and redirect_uri.
 - Default scope: `openid profile email offline_access`.
