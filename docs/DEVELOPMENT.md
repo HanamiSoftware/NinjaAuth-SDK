@@ -46,7 +46,7 @@ Do not use the former static form `NinjaAuth.init(config)`. The Extension Backgr
 
 The automated suite lives in `test/ninja-auth.test.mjs`. It uses isolated module instances so the singleton state of one test cannot contaminate another. Chrome identity/storage and Worker HTTP responses are mocked at their boundaries.
 
-The suite currently contains 33 test cases covering:
+The suite currently contains 37 test cases covering:
 
 - Export shape, constructor singleton identity, initialization and configuration validation.
 - Calls made before initialization and unsupported web login.
@@ -87,7 +87,7 @@ The Auth Worker currently resides in [NinjaURL-URL-Shortener/Workers/auth-worker
 
 ## Remaining validation
 
-- [ ] Run typecheck, build, and all 33 automated tests on the exact dev commit.
+- [ ] Run typecheck, build, and all 37 automated tests on the exact dev commit.
 - [ ] Review the public type exports, including whether `NinjaSession` should be exported from the package entry point.
 - [ ] Complete Chrome/Worker tests for cookies, CORS, cache restore, and protected-operation checks.
 - [ ] Record the exact SDK, Extension, and Worker commits used for end-to-end validation.
