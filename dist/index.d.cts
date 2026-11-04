@@ -23,7 +23,9 @@ interface NinjaSession {
 declare class NinjaAuthClient {
     private config;
     readonly version = "0.1.0";
-    init(config: NinjaAuthConfig): void;
+    private static instance;
+    private constructor();
+    static init(config: NinjaAuthConfig): NinjaAuthClient;
     login(): Promise<NinjaUser>;
     private ensureInitialized;
     private createAuthFlow;
@@ -31,6 +33,5 @@ declare class NinjaAuthClient {
     logout(): Promise<void>;
     getSession(): Promise<NinjaSession>;
 }
-declare const NinjaAuth: NinjaAuthClient;
 
-export { NinjaAuth, type NinjaAuthConfig, type NinjaUser };
+export { NinjaAuthClient as NinjaAuth, type NinjaAuthConfig, type NinjaUser };

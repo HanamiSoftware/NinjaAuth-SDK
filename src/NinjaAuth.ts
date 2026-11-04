@@ -87,11 +87,11 @@ class NinjaAuthClient {
     private config: NinjaAuthConfig | null = null;
 
     public readonly version = VERSION;
+    private static instance: NinjaAuthClient | null = null;
 
-
-    public init(config: NinjaAuthConfig): void {
-
-        const supportedPlatforms = config?.platform ?? "extension";
+    private constructor(config: NinjaAuthConfig) {
+        this.config = config;
+        const supportedPlatforms = this.config?.platform ?? "extension";
 
         if (
             supportedPlatforms !== "extension" &&
@@ -103,21 +103,21 @@ class NinjaAuthClient {
             );
         }
 
-        if (!config.clientId) {
+        if (!this.config?.clientId) {
             throw NinjaAuthErrorException(
                 "CONFIGURATION",
                 "NinjaAuth: clientId is required."
             );
         }
 
-        if (!config.redirectUri) {
+        if (!this.config?.redirectUri) {
             throw NinjaAuthErrorException(
                 "CONFIGURATION",
                 "NinjaAuth: redirectUri is required."
             );
         }
 
-        const environment = config.environment ?? "production";
+        const environment = this.config?.environment ?? "production";
 
         if (
             environment !== "development" &&
@@ -130,11 +130,19 @@ class NinjaAuthClient {
         }
 
         this.config = {
-            clientId: config.clientId,
-            redirectUri: config.redirectUri,
+            clientId: this.config?.clientId,
+            redirectUri: this.config?.redirectUri,
             platform: supportedPlatforms,
             environment
         };
+    }
+
+    public static init(config: NinjaAuthConfig): NinjaAuthClient {
+         if (!NinjaAuthClient.instance) {
+                NinjaAuthClient.instance = new NinjaAuthClient(config);
+         }   
+
+         return NinjaAuthClient.instance;
     }
 
 
@@ -513,6 +521,8 @@ class NinjaAuthClient {
 }
 }
 
+export { NinjaAuthClient as NinjaAuth };
 
-export const NinjaAuth =
-    new NinjaAuthClient();
+if (typeof window !== 'undefined') {
+  (window as any).NinjaAuth = NinjaAuthClient;
+}

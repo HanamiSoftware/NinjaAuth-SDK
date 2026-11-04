@@ -3,17 +3,11 @@ import { defineConfig } from "tsup";
 export default defineConfig([
     {
         entry: ["src/index.ts"],
-        format: ["esm", "cjs"],
-        dts: true,
+        format: ["iife", "cjs", "esm"],
+        globalName: "NinjaAuth",
+        minify: false,
         sourcemap: true,
-        clean: true
-    },
-    {
-        entry: ["src/index.ts"],
-        format: ["iife"],
-        globalName: "NinjaConnect",
-        minify: true,
-        sourcemap: true,
-        outDir: "dist"
+        outDir: "dist",
+        dts: true
     }
 ]);

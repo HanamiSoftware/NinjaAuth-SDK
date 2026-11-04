@@ -207,32 +207,31 @@ function isNinjaSession(value) {
   }
   return value.user === null && value.session === null;
 }
-var NinjaAuthClient = class {
-  constructor() {
+var _NinjaAuthClient = class _NinjaAuthClient {
+  constructor(config) {
     this.config = null;
     this.version = VERSION;
-  }
-  init(config) {
-    const supportedPlatforms = config?.platform ?? "extension";
+    this.config = config;
+    const supportedPlatforms = this.config?.platform ?? "extension";
     if (supportedPlatforms !== "extension" && supportedPlatforms !== "web") {
       throw NinjaAuthErrorException(
         "CONFIGURATION",
         "NinjaAuth: platform must be 'extension' or 'web'."
       );
     }
-    if (!config.clientId) {
+    if (!this.config?.clientId) {
       throw NinjaAuthErrorException(
         "CONFIGURATION",
         "NinjaAuth: clientId is required."
       );
     }
-    if (!config.redirectUri) {
+    if (!this.config?.redirectUri) {
       throw NinjaAuthErrorException(
         "CONFIGURATION",
         "NinjaAuth: redirectUri is required."
       );
     }
-    const environment = config.environment ?? "production";
+    const environment = this.config?.environment ?? "production";
     if (environment !== "development" && environment !== "production") {
       throw NinjaAuthErrorException(
         "CONFIGURATION",
@@ -240,11 +239,17 @@ var NinjaAuthClient = class {
       );
     }
     this.config = {
-      clientId: config.clientId,
-      redirectUri: config.redirectUri,
+      clientId: this.config?.clientId,
+      redirectUri: this.config?.redirectUri,
       platform: supportedPlatforms,
       environment
     };
+  }
+  static init(config) {
+    if (!_NinjaAuthClient.instance) {
+      _NinjaAuthClient.instance = new _NinjaAuthClient(config);
+    }
+    return _NinjaAuthClient.instance;
   }
   async login() {
     if (!this.ensureInitialized()) {
@@ -283,7 +288,7 @@ var NinjaAuthClient = class {
       redirectUri: this.config.redirectUri,
       codeChallenge: challenge,
       state,
-      scope: "openid offline_access"
+      scope: NINJA_CONNECT.DEFAULT_SCOPE
     });
     const transaction = {
       verifier,
@@ -516,8 +521,12 @@ var NinjaAuthClient = class {
     return result.data;
   }
 };
-var NinjaAuth = new NinjaAuthClient();
+_NinjaAuthClient.instance = null;
+var NinjaAuthClient = _NinjaAuthClient;
+if (typeof window !== "undefined") {
+  window.NinjaAuth = NinjaAuthClient;
+}
 export {
-  NinjaAuth
+  NinjaAuthClient as NinjaAuth
 };
 //# sourceMappingURL=index.js.map
