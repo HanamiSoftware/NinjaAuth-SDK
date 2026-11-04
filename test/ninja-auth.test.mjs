@@ -260,6 +260,59 @@ test("login explicitly rejects the not-yet-supported web platform", async () => 
     );
 });
 
+test("a failed init validation leaves the singleton available for a valid init", async () => {
+    const { auth } = await createClient();
+
+    assert.throws(
+        () => auth.init({
+            clientId: "",
+            redirectUri: "https://example.com/callback"
+        }),
+        (error) => error.code === "CONFIGURATION"
+    );
+
+    assert.strictEqual(
+        auth.init({
+            clientId: "test-client",
+            redirectUri: "https://example.com/callback"
+        }),
+        auth
+    );
+});
+
+test("platform defaults to extension", async () => {
+    const { auth } = await createClient();
+    let authorizationLaunches = 0;
+
+    auth.init({
+        clientId: "test-client",
+        redirectUri: "https://example.com/callback",
+        environment: "development"
+    });
+
+    chromeMock.identity.launchWebAuthFlow = async ({ url }) => {
+        authorizationLaunches += 1;
+        const authorizationUrl = new URL(url);
+        const callbackUrl = new URL(
+            authorizationUrl.searchParams.get("redirect_uri")
+        );
+        callbackUrl.searchParams.set("code", "authorization-code");
+        callbackUrl.searchParams.set(
+            "state",
+            authorizationUrl.searchParams.get("state")
+        );
+        return callbackUrl.toString();
+    };
+
+    globalThis.fetch = async () => response({
+        success: true,
+        data: { user: USER }
+    });
+
+    assert.deepEqual(await auth.login(), USER);
+    assert.equal(authorizationLaunches, 1);
+});
+
 // Session lookup contract
 
 test("getSession returns an authenticated session and includes cookies", async () => {
@@ -467,6 +520,19 @@ test("logout classifies network failures", async () => {
     );
 });
 
+test("logout rejects non-JSON responses", async () => {
+    const { auth } = await initialize();
+
+    globalThis.fetch = async () => new Response("not-json", {
+        status: 200
+    });
+
+    await assert.rejects(
+        auth.logout(),
+        (error) => error.code === "INVALID_RESPONSE"
+    );
+});
+
 // Authorization Code + PKCE flow
 
 test("login completes PKCE authorization and exchanges the code", async () => {
@@ -662,6 +728,26 @@ test("login reports transaction cleanup failure after a successful exchange", as
             error.code === "TRANSACTION_CLEANUP_FAILED" &&
             error.originalError?.message === "Storage cleanup unavailable"
     );
+});
+
+test("login rejects an exchange response with an invalid user profile", async () => {
+    const { auth } = await initialize();
+
+    globalThis.fetch = async () => response({
+        success: true,
+        data: {
+            user: {
+                id: 123,
+                email: "not-a-valid-profile"
+            }
+        }
+    });
+
+    await assert.rejects(
+        auth.login(),
+        (error) => error.code === "INVALID_RESPONSE"
+    );
+    assert.equal(chromeMock.transactions.size, 0);
 });
 
 // End-to-end SDK lifecycle using mocked Chrome and Worker boundaries
