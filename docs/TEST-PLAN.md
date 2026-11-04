@@ -94,3 +94,10 @@ For each execution, record:
 - Relevant sanitized console/network evidence.
 
 Never include cookie values, authorization codes, PKCE verifiers, access/refresh tokens, or other secrets in the evidence.
+
+
+## Execution evidence — 4 November 2026
+
+- GitHub Actions [run #25](https://github.com/HanamiSoftware/NinjaAuth-SDK/actions/runs/41863128345) passed `npm run typecheck`, `npm run build`, and all 37 tests on `dev` commit `a8e79dceea72cbc8c2b0c69f897ec42c9e0ce9d4`.
+- This result is specific to that exact `dev` commit. The inspected `master` head is `96ff24ed380713ac08d9d78176f0636f69444b92`; no CI result was verified for that head in the 4 November audit.
+- The plan remains open for real Chrome/Worker cookie, CORS, Service Worker restart, and protected-operation checks. The automated mock suite does not replace those tests.
