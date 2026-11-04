@@ -107,4 +107,4 @@ Global logout at `POST /v1/logout/all` is proposed but not implemented. AuthGear
 
 ## Verification boundary
 
-The dev test suite has been updated to the constructor-singleton contract and contains 33 cases. It is test code, not a passing test result: execution on the current dev commit remains pending. Live Chrome/Worker cookie/CORS E2E and the Extension cache/protected-operation checks remain separate verification tasks.
+The dev test suite has been updated to the constructor-singleton contract and contains 37 cases. It is test code, not a passing test result: execution on the current dev commit remains pending. Live Chrome/Worker cookie/CORS E2E and the Extension cache/protected-operation checks remain separate verification tasks.
