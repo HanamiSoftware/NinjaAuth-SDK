@@ -2,10 +2,10 @@
 
 > **Last reviewed:** 4 November 2026  
 > **Repository:** HanamiSoftware/NinjaAuth-SDK  
-> **Branches verified:** `dev` and `master` — identical at commit `66a824ebecd355c5d1f7ae3b2943b0022bcb6eb1`  
+> **Branches verified:** `dev` at `a8e79dceea72cbc8c2b0c69f897ec42c9e0ce9d4`; `master` at `96ff24ed380713ac08d9d78176f0636f69444b92`  
 > **Package/source version:** v0.1.0  
 
-This roadmap records the verified SDK state shared by `dev` and `master` at the commit identified above. The two branches are identical at that commit; future branch-specific changes must be checked before updating this shared status.
+This roadmap records the current branch distinction. `dev` and `master` are divergent in Git history; the source and test files reviewed for this audit are aligned, while `.github/workflows/sdk-ci.yml`, `docs/ROADMAP.md`, and `docs/TEST-PLAN.md` differ. `dev` contains the `workflow_dispatch` trigger that is not yet present on `master`.
 
 ## Executive status
 
@@ -38,7 +38,7 @@ The test suite is present on both SDK branches:
 - Tests import the built ESM entry in isolated module instances so singleton state cannot leak between cases.
 - Coverage includes constructor identity, initialization, configuration validation, pre-init guards, session success/anonymous/error handling, logout confirmation, PKCE/state/exchange, cleanup behavior, and a mocked login → session → logout lifecycle.
 
-**Important:** the test code is prepared but has not yet been executed on the current shared commit. No passing test, typecheck, build, CI, or release-readiness claim is made.
+**Execution evidence:** GitHub Actions run [#25](https://github.com/HanamiSoftware/NinjaAuth-SDK/actions/runs/41863128345) passed typecheck, build, and 37/37 tests on the `dev` commit `a8e79dceea72cbc8c2b0c69f897ec42c9e0ce9d4`. This is evidence for that exact `dev` commit only. No CI result was verified for the inspected `master` head `96ff24ed380713ac08d9d78176f0636f69444b92`; do not infer a pass on `master` from run #25.
 
 ## Extension integration status
 
@@ -59,12 +59,12 @@ The cache entry is presentation state, not proof of a live server session. Prote
 
 ## Remaining work — priority order
 
-### P0 — Run the automated SDK checks
+### P0 — Keep automated SDK evidence current
 
-- [ ] Run `npm run typecheck` on the current shared commit.
-- [ ] Run `npm run build` on the current shared commit.
-- [ ] Run `npm test` and resolve any failures.
-- [ ] Record exact commit and command output; do not infer success from the test file.
+- [x] Run `npm run typecheck`, `npm run build`, and `npm test` on `dev` commit `a8e79dceea72cbc8c2b0c69f897ec42c9e0ce9d4`; GitHub Actions #25 passed 37/37 tests.
+- [ ] Obtain a CI result for the inspected `master` head `96ff24ed380713ac08d9d78176f0636f69444b92` or update `master` through the normal PR process and rerun CI.
+- [ ] Synchronize the `workflow_dispatch` trigger from `dev` to `master` through the normal PR process.
+- [ ] Keep test evidence tied to exact commit SHAs; do not infer success from the presence of test files.
 
 ### P0 — Complete integration/security checks
 
