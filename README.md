@@ -2,7 +2,7 @@
 
 NinjaAuth is the TypeScript client SDK for integrating applications with **Ninja Connect**, the shared identity and session service.
 
-<badge>Current package version: 0.1.0</badge>
+**Current package version:** 0.1.0
 
 **Release status:** development milestone 0.1.0; no public npm release or release tag is asserted by this repository documentation. Do not use the former `1.0.1-beta` wording as a version or agreed milestone.
 
