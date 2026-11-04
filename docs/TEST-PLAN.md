@@ -36,6 +36,19 @@ npm test
 
 Record the commit SHA and complete output. Do not mark the suite green until all three commands finish successfully.
 
+### Verified CI evidence — 4 November 2026
+
+- Repository: `HanamiSoftware/NinjaAuth-SDK`
+- Branch: `dev`
+- Commit: `a8e79dceea72cbc8c2b0c69f897ec42c9e0ce9d4`
+- Workflow: `SDK CI`, run [#25](https://github.com/HanamiSoftware/NinjaAuth-SDK/actions/runs/41863128345)
+- Event: `push` (the commit itself adds `workflow_dispatch` for future manual runs)
+- Result: completed / success
+- Steps: `npm ci`, `npm run typecheck`, `npm run build`, `npm test` — all successful
+- Test summary: 37 passed, 0 failed, 0 skipped
+
+This verifies the SDK checks on `dev`. It does not replace the Chrome/Worker integration matrix below and does not prove cookie, CORS, provider, or live browser behavior.
+
 ## 2. Chrome Extension integration matrix
 
 Run with the Extension dev branch and the intended local or production Auth Worker environment.
