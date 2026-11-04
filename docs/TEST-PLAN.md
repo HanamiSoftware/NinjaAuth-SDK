@@ -6,7 +6,7 @@ This plan separates deterministic SDK regression tests from real Chrome/Worker i
 
 File: `test/ninja-auth.test.mjs`  
 Runner: Node.js built-in test runner  
-Current coverage: 33 top-level cases.
+Current coverage: 37 top-level cases.
 
 The suite imports the built SDK entry point with a fresh module identity for each case. This isolates the runtime singleton between tests while preserving the real constructor behavior within each case.
 
