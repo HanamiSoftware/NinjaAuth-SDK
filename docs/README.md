@@ -1,28 +1,32 @@
 # NinjaAuth documentation
 
-This directory is the **single source of truth for project documentation**. The repository-root README is the entry point; detailed documents belong here.
+This directory is the authoritative documentation set for the NinjaAuth SDK. The repository-root README is the entry point; detailed technical status and contracts live here.
 
-## Start here
+## Document ownership
 
-| Document | Purpose |
+| Document | Authority |
 |---|---|
-| [Architecture](ARCHITECTURE.md) | System boundaries, identity model, SDK responsibilities, and session architecture |
-| [API contract](API-CONTRACT.md) | Current SDK/Worker endpoint contract, known mismatches, and backend verification evidence |
-| [Roadmap](ROADMAP.md) | Authoritative implementation status, completed work, remaining work, and priorities |
-| [Core checkpoint](NINJAAUTH-CORE-CHECKPOINT.md) | Product/API decisions and the Core 0.1 definition of done |
-| [Development guide](DEVELOPMENT.md) | Local workflow, validation, security checks, and cross-repository development notes |
+| [Roadmap](ROADMAP.md) | Single source of truth for implementation status, branch boundaries, evidence, blockers, and priorities |
+| [API contract](API-CONTRACT.md) | SDK ↔ Worker request/response contract and verification boundaries |
+| [Architecture](ARCHITECTURE.md) | Stable responsibility boundaries and architectural decisions |
+| [Development guide](DEVELOPMENT.md) | Reproducible local workflow and validation commands |
+| [Core checkpoint](NINJAAUTH-CORE-CHECKPOINT.md) | Historical checkpoint; not a live status source |
+| [Former 1.0.1-beta notes](RELEASE-NOTES-v1.0.1-beta.md) | Superseded historical record; its milestone/version claim is invalid |
 
 ## Documentation rules
 
-- Update the roadmap and the relevant technical document whenever implementation behavior or a verified test result changes.
-- Distinguish clearly between **implemented**, **tested**, **verified in a specific scenario**, **planned**, and **not yet tested**.
-- Keep product-specific authorization and profile data out of the shared Ninja Connect identity contract.
-- Keep the public NinjaAuth API provider-neutral; AuthGear is the current upstream provider behind Ninja Connect, not an SDK dependency.
-- Record the evidence boundary for every concurrency result, including branch, test path, real database/provider mocks, and CI status.
+- Update the roadmap when implementation status, branch state, evidence, or priorities change.
+- Update the relevant technical contract when behavior or API changes.
+- Distinguish **implemented**, **tested**, **verified in a specific scenario**, **planned**, and **not verified**.
+- State the exact repository, branch, commit, and test boundary for evidence.
+- Never describe a test suite as passing merely because test files exist.
+- Never infer that generated artifacts match source; inspect the artifacts.
+- Never use a planning label as a package version. The current package and source runtime version are 0.1.0.
+- A branch-specific statement must name its branch. Do not copy status between master and dev without checking both.
 
 ## Related implementation repositories
 
 - [NinjaAuth SDK](https://github.com/HanamiSoftware/NinjaAuth-SDK)
-- [Ninja Connect Auth Worker (current location)](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker)
+- [Ninja Connect Auth Worker — current location](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker)
 
-The Worker is intended to move to its dedicated Ninja Connect repository after the audit and transfer planning are complete.
+The Worker is intended to move to its dedicated Ninja Connect repository after audit and transfer planning are complete.
