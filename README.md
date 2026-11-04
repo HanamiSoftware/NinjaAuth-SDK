@@ -2,13 +2,13 @@
 
 NinjaAuth is the TypeScript client SDK for integrating applications with **Ninja Connect**, the shared identity and session service.
 
-> **Project milestone — NinjaAuth v1.0.1-beta (3 November 2026).** This is the agreed internal milestone name, not yet the published npm/package version. Repository metadata and the source constant still report **0.1.0**; the generated SDK distribution must be rebuilt and aligned before a v1.0.1-beta package or tag is published.
+<badge>Current package version: 0.1.0</badge>
 
-> **Release status:** beta development milestone; not production-release-ready. The Chrome Extension integration is present on the NinjaURL Extension master branch. The cache-first restore optimization is present on the Extension dev branch, not yet on Extension master. Live Extension/Worker end-to-end verification remains open.
+**Release status:** development milestone 0.1.0; no public npm release or release tag is asserted by this repository documentation. Do not use the former `1.0.1-beta` wording as a version or agreed milestone.
 
 ## Current public API
 
-~~~ts
+```ts
 import { NinjaAuth } from "@ninjaconnect/auth";
 
 NinjaAuth.init({
@@ -18,16 +18,16 @@ NinjaAuth.init({
   environment: "development", // or "production"; default: production
 });
 
-const user = await NinjaAuth.login();         // Promise<NinjaUser>
-const session = await NinjaAuth.getSession();  // Promise<NinjaSession>
-await NinjaAuth.logout();                     // Promise<void>
-~~~
+const user = await NinjaAuth.login();
+const session = await NinjaAuth.getSession();
+await NinjaAuth.logout();
+```
 
-- login() performs Authorization Code + PKCE and returns the normalized Ninja Connect user.
-- getSession() observes the existing server-side session; it never starts interactive login.
-- logout() revokes the current Ninja Connect session represented by the HttpOnly cookie.
-- Only an explicit 401 INVALID_SESSION is normalized to an unauthenticated session. Network, malformed-response, Worker, and temporary refresh failures remain errors.
-- Chrome Extension login is implemented. Web login is explicitly unsupported and rejects with UNSUPPORTED_PLATFORM.
+- `login()` performs Authorization Code + PKCE for Chrome Extension and returns a normalized Ninja Connect user.
+- `getSession()` observes the existing server-side session; it never starts interactive login.
+- `logout()` revokes the current Ninja Connect session represented by the HttpOnly cookie.
+- Only an explicit `401 INVALID_SESSION` is normalized to an unauthenticated session. Network, malformed-response, Worker, and temporary refresh failures remain errors.
+- Chrome Extension login is implemented in source. Web login is explicitly unsupported and rejects with `UNSUPPORTED_PLATFORM`.
 
 ## Architecture
 
@@ -44,21 +44,19 @@ Start with the [documentation index](docs/README.md).
 - [Architecture and responsibility boundaries](docs/ARCHITECTURE.md)
 - [SDK ↔ Auth Worker API contract](docs/API-CONTRACT.md)
 - [Roadmap and verified status](docs/ROADMAP.md)
-- [Beta milestone notes](docs/RELEASE-NOTES-v1.0.1-beta.md)
 - [Development guide](docs/DEVELOPMENT.md)
-- [Core checkpoint](docs/NINJAAUTH-CORE-CHECKPOINT.md)
+- [Historical Core checkpoint](docs/NINJAAUTH-CORE-CHECKPOINT.md)
+- [Historical milestone note — superseded](docs/RELEASE-NOTES-v1.0.1-beta.md)
 
-## Version and artifact caveat
+## Version and artifact status — reviewed 4 November 2026
 
-As reviewed on 3 November 2026:
+- `package.json`: `0.1.0`.
+- `src/NinjaAuth.ts`: runtime version constant `0.1.0`.
+- Source default scope: `openid profile email offline_access`.
+- The committed `dist/index.global.js` still uses `openid offline_access` in its authorization request; the generated IIFE is not aligned with source.
+- The Extension's vendored IIFE was previously reported to contain the full scope, but that does not establish that it matches a freshly generated SDK artifact.
 
-- package.json version: **0.1.0**.
-- src/NinjaAuth.ts runtime version constant: **0.1.0**.
-- The source now reads the default authorization scope from NINJA_CONNECT.DEFAULT_SCOPE (openid profile email offline_access).
-- dist/index.global.js has not yet been rebuilt after that source change; its authorization request still uses openid offline_access.
-- The NinjaURL Extension's vendored IIFE currently contains openid profile email offline_access.
-
-Do not publish or tag the package as 1.0.1-beta until package metadata, source version, generated dist/, and the Extension's vendored bundle are aligned and the release checks in the roadmap pass.
+The source and package version remain 0.1.0. Rebuild and verify every distribution artifact before publishing; do not infer release readiness from source code or a documentation milestone.
 
 ## Repository scope
 
