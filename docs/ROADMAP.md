@@ -4,7 +4,7 @@
 > **Repository:** HanamiSoftware/NinjaAuth-SDK  
 > **Branch:** dev  
 > **Package/source version:** 0.1.0  
-> **Latest test-suite update:** commit 4caa4a42cdc246765a3944ec85b62118a9b3caaa
+> **Latest test-suite update:** commit 59f259ab9ef0c68a609775a1001245c42c95d189
 
 This roadmap is authoritative for the SDK **dev** branch only. It does not describe master. At the last branch comparison, dev and master were divergent: dev was 48 commits ahead and 19 behind master. Do not transfer implementation or status claims between branches without review.
 
@@ -39,7 +39,7 @@ The previous 20-case test file called lifecycle methods on the exported class, w
 The test suite was rewritten and committed to dev:
 
 - File: `test/ninja-auth.test.mjs`.
-- Current suite: 33 top-level Node.js test cases.
+- Current suite: 37 top-level Node.js test cases.
 - Tests import the built ESM entry in isolated module instances so singleton state cannot leak between cases.
 - Coverage includes constructor identity, initialization, configuration validation, pre-init guards, session success/anonymous/error handling, logout confirmation, PKCE/state/exchange, cleanup behavior, and a mocked login → session → logout lifecycle.
 
