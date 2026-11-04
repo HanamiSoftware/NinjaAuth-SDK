@@ -207,31 +207,42 @@ function isNinjaSession(value) {
   }
   return value.user === null && value.session === null;
 }
-var _NinjaAuthClient = class _NinjaAuthClient {
-  constructor(config) {
+var _NinjaAuth = class _NinjaAuth {
+  constructor() {
     this.config = null;
     this.version = VERSION;
-    this.config = config;
-    const supportedPlatforms = this.config?.platform ?? "extension";
+    if (_NinjaAuth.instance) {
+      return _NinjaAuth.instance;
+    }
+    _NinjaAuth.instance = this;
+  }
+  init(config) {
+    if (this.config !== null) {
+      throw NinjaAuthErrorException(
+        "INITIALIZATION",
+        "NinjaAuth: SDK has already been initialized."
+      );
+    }
+    const supportedPlatforms = config.platform ?? "extension";
     if (supportedPlatforms !== "extension" && supportedPlatforms !== "web") {
       throw NinjaAuthErrorException(
         "CONFIGURATION",
         "NinjaAuth: platform must be 'extension' or 'web'."
       );
     }
-    if (!this.config?.clientId) {
+    if (!config.clientId) {
       throw NinjaAuthErrorException(
         "CONFIGURATION",
         "NinjaAuth: clientId is required."
       );
     }
-    if (!this.config?.redirectUri) {
+    if (!config.redirectUri) {
       throw NinjaAuthErrorException(
         "CONFIGURATION",
         "NinjaAuth: redirectUri is required."
       );
     }
-    const environment = this.config?.environment ?? "production";
+    const environment = config.environment ?? "production";
     if (environment !== "development" && environment !== "production") {
       throw NinjaAuthErrorException(
         "CONFIGURATION",
@@ -239,17 +250,12 @@ var _NinjaAuthClient = class _NinjaAuthClient {
       );
     }
     this.config = {
-      clientId: this.config?.clientId,
-      redirectUri: this.config?.redirectUri,
+      clientId: config.clientId,
+      redirectUri: config.redirectUri,
       platform: supportedPlatforms,
       environment
     };
-  }
-  static init(config) {
-    if (!_NinjaAuthClient.instance) {
-      _NinjaAuthClient.instance = new _NinjaAuthClient(config);
-    }
-    return _NinjaAuthClient.instance;
+    return this;
   }
   async login() {
     if (!this.ensureInitialized()) {
@@ -521,12 +527,9 @@ var _NinjaAuthClient = class _NinjaAuthClient {
     return result.data;
   }
 };
-_NinjaAuthClient.instance = null;
-var NinjaAuthClient = _NinjaAuthClient;
-if (typeof window !== "undefined") {
-  window.NinjaAuth = NinjaAuthClient;
-}
+_NinjaAuth.instance = null;
+var NinjaAuth = _NinjaAuth;
 export {
-  NinjaAuthClient as NinjaAuth
+  NinjaAuth
 };
 //# sourceMappingURL=index.js.map

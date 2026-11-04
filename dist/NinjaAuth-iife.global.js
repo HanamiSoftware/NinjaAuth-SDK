@@ -1,29 +1,5 @@
 "use strict";
-var NinjaAuth = (() => {
-  var __defProp = Object.defineProperty;
-  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-  var __getOwnPropNames = Object.getOwnPropertyNames;
-  var __hasOwnProp = Object.prototype.hasOwnProperty;
-  var __export = (target, all) => {
-    for (var name in all)
-      __defProp(target, name, { get: all[name], enumerable: true });
-  };
-  var __copyProps = (to, from, except, desc) => {
-    if (from && typeof from === "object" || typeof from === "function") {
-      for (let key of __getOwnPropNames(from))
-        if (!__hasOwnProp.call(to, key) && key !== except)
-          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
-    }
-    return to;
-  };
-  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-
-  // src/index.ts
-  var index_exports = {};
-  __export(index_exports, {
-    NinjaAuth: () => NinjaAuthClient
-  });
-
+(() => {
   // src/config.ts
   var NINJA_CONNECT = {
     AUTHORIZATION_ENDPOINT: "https://auth.ninjaconnect.io",
@@ -233,31 +209,42 @@ var NinjaAuth = (() => {
     }
     return value.user === null && value.session === null;
   }
-  var _NinjaAuthClient = class _NinjaAuthClient {
-    constructor(config) {
+  var _NinjaAuth = class _NinjaAuth {
+    constructor() {
       this.config = null;
       this.version = VERSION;
-      this.config = config;
-      const supportedPlatforms = this.config?.platform ?? "extension";
+      if (_NinjaAuth.instance) {
+        return _NinjaAuth.instance;
+      }
+      _NinjaAuth.instance = this;
+    }
+    init(config) {
+      if (this.config !== null) {
+        throw NinjaAuthErrorException(
+          "INITIALIZATION",
+          "NinjaAuth: SDK has already been initialized."
+        );
+      }
+      const supportedPlatforms = config.platform ?? "extension";
       if (supportedPlatforms !== "extension" && supportedPlatforms !== "web") {
         throw NinjaAuthErrorException(
           "CONFIGURATION",
           "NinjaAuth: platform must be 'extension' or 'web'."
         );
       }
-      if (!this.config?.clientId) {
+      if (!config.clientId) {
         throw NinjaAuthErrorException(
           "CONFIGURATION",
           "NinjaAuth: clientId is required."
         );
       }
-      if (!this.config?.redirectUri) {
+      if (!config.redirectUri) {
         throw NinjaAuthErrorException(
           "CONFIGURATION",
           "NinjaAuth: redirectUri is required."
         );
       }
-      const environment = this.config?.environment ?? "production";
+      const environment = config.environment ?? "production";
       if (environment !== "development" && environment !== "production") {
         throw NinjaAuthErrorException(
           "CONFIGURATION",
@@ -265,17 +252,12 @@ var NinjaAuth = (() => {
         );
       }
       this.config = {
-        clientId: this.config?.clientId,
-        redirectUri: this.config?.redirectUri,
+        clientId: config.clientId,
+        redirectUri: config.redirectUri,
         platform: supportedPlatforms,
         environment
       };
-    }
-    static init(config) {
-      if (!_NinjaAuthClient.instance) {
-        _NinjaAuthClient.instance = new _NinjaAuthClient(config);
-      }
-      return _NinjaAuthClient.instance;
+      return this;
     }
     async login() {
       if (!this.ensureInitialized()) {
@@ -547,11 +529,10 @@ var NinjaAuth = (() => {
       return result.data;
     }
   };
-  _NinjaAuthClient.instance = null;
-  var NinjaAuthClient = _NinjaAuthClient;
-  if (typeof window !== "undefined") {
-    window.NinjaAuth = NinjaAuthClient;
-  }
-  return __toCommonJS(index_exports);
+  _NinjaAuth.instance = null;
+  var NinjaAuth = _NinjaAuth;
+
+  // src/NinjaAuth-iife.ts
+  self.NinjaAuth = NinjaAuth;
 })();
-//# sourceMappingURL=index.global.js.map
+//# sourceMappingURL=NinjaAuth-iife.global.js.map
