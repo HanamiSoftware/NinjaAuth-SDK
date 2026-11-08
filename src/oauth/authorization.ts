@@ -57,7 +57,7 @@ export function parseAuthorizationCallback(
     } catch (error) {
         throw NinjaAuthErrorException(
             "INVALID_CALLBACK",
-            "L'indirizzo di risposta dell'autorizzazione non è valido.",
+            "L'indirizzo di risposta dell'autorizzazione non Ã¨ valido.",
             error
         );
     }
@@ -72,7 +72,7 @@ export function parseAuthorizationCallback(
         if (error === "access_denied") {
             throw NinjaAuthErrorException(
                 "OAUTH_DENIED",
-                "L'autorizzazione è stata negata.",
+                "L'autorizzazione Ã¨ stata negata.",
                 error
             );
         }
@@ -91,7 +91,7 @@ export function parseAuthorizationCallback(
     if (!code) {
         throw NinjaAuthErrorException(
             "INVALID_CALLBACK",
-            "Il codice di autorizzazione non è presente nella risposta.",
+            "Il codice di autorizzazione non Ã¨ presente nella risposta.",
             error
         );
     }
@@ -99,7 +99,7 @@ export function parseAuthorizationCallback(
     if (!state) {
         throw NinjaAuthErrorException(
             "INVALID_CALLBACK",
-            "Lo state non è presente nella risposta di autorizzazione.",
+            "Lo state non Ã¨ presente nella risposta di autorizzazione.",
             error
         );
     }

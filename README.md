@@ -2,7 +2,7 @@
 
 NinjaAuth is the TypeScript client SDK for integrating applications with **Ninja Connect**, the shared identity and session service.
 
-**Package/source version:** v0.1.0. No public release or release tag is asserted.
+> **Development status:** NinjaAuth Core 0.1 is not yet release-ready. The inspected SDK source still has an incomplete Extension exchange contract, a local development endpoint, an unfinished Web flow, a placeholder SDK logout method, and no SDK test suite in its package scripts. RT-001/RT-002 and RT-003 cover focused backend concurrency scenarios (real PostgreSQL, mocked upstream provider); they are not a complete live AuthGear end-to-end test. See the [roadmap](docs/ROADMAP.md) for evidence and next steps.
 
 ## Public API
 
@@ -51,14 +51,14 @@ The current package entry point exports `NinjaAuthConfig` and `NinjaUser`. The `
 - [Documentation index](docs/README.md)
 - [Branch roadmap](docs/ROADMAP.md)
 - [Architecture](docs/ARCHITECTURE.md)
-- [SDK ↔ Worker API contract](docs/API-CONTRACT.md)
+- [SDK â†” Worker API contract](docs/API-CONTRACT.md)
 - [Development guide](docs/DEVELOPMENT.md)
 - [Test plan](docs/TEST-PLAN.md)
 - [Historical Core checkpoint](docs/NINJAAUTH-CORE-CHECKPOINT.md)
 
 ## Related component
 
-The Ninja Connect Auth Worker currently resides in [NinjaURL — Workers/auth-worker](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker). Its transfer to a dedicated repository is not complete.
+The Ninja Connect Auth Worker currently resides in [NinjaURL â€” Workers/auth-worker](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker). Its transfer to a dedicated repository is not complete.
 
 ## License
 

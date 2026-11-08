@@ -3,12 +3,14 @@
  * @param {string} clientId - The client ID for the application.
  * @param {string} redirectUri - The redirect URI for the application.
  * @param {("extension" | "web")} [platform] - The platform type, either "extension" or "web". Defaults to "extension".
+ * 
  */
 export interface NinjaAuthConfig {
     clientId: string;
     redirectUri: string;
     platform?: "extension" | "web";
     environment?: "development" | "production";
+		scopes?: string[];
 }
 
 /**
