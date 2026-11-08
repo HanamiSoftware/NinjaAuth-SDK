@@ -216,6 +216,14 @@ var _NinjaAuth = class _NinjaAuth {
     }
     _NinjaAuth.instance = this;
   }
+  /**
+   * initialize the NinjaAuth instance with the provided configuration.
+   * @param config - The configuration object for initializing the NinjaAuth instance.
+   * @param config.clientId - The client ID for the application.
+   * @param config.redirectUri - The redirect URI for the application.
+   * @param config.platform - The platform type, either "extension" or "web". Defaults to "extension".
+   * @returns The initialized NinjaAuth instance.
+   */
   init(config) {
     if (this.config !== null) {
       throw NinjaAuthErrorException(
@@ -257,6 +265,11 @@ var _NinjaAuth = class _NinjaAuth {
     };
     return this;
   }
+  /**
+   * login initiates the authentication flow for the user. It generates a PKCE challenge and state, constructs the authorization URL, and launches the authorization flow. Upon successful authentication, it exchanges the authorization code for an access token and retrieves the user's profile information.
+   * 
+   * @returns {Promise<NinjaUser>} A promise that resolves to the authenticated user's profile information.
+   */
   async login() {
     if (!this.ensureInitialized()) {
       throw NinjaAuthErrorException(
@@ -311,14 +324,14 @@ var _NinjaAuth = class _NinjaAuth {
       if (callback.state !== state) {
         throw NinjaAuthErrorException(
           "STATE_MISMATCH",
-          "La verifica di sicurezza dell'autorizzazione non \xE8 riuscita."
+          "La verifica di sicurezza dell'autorizzazione non \xC3\xA8 riuscita."
         );
       }
       const returnedTransaction = await storage.get(state);
       if (!returnedTransaction) {
         throw NinjaAuthErrorException(
           "TRANSACTION_NOT_FOUND",
-          "La transazione di autorizzazione non \xE8 pi\xF9 disponibile."
+          "La transazione di autorizzazione non \xC3\xA8 pi\xC3\xB9 disponibile."
         );
       }
       return await this.exchangeCodeForToken(
@@ -337,7 +350,7 @@ var _NinjaAuth = class _NinjaAuth {
         if (!hasPrimaryError) {
           throw NinjaAuthErrorException(
             "TRANSACTION_CLEANUP_FAILED",
-            "Non \xE8 stato possibile eliminare la transazione OAuth.",
+            "Non \xC3\xA8 stato possibile eliminare la transazione OAuth.",
             cleanupError
           );
         }
@@ -384,14 +397,14 @@ var _NinjaAuth = class _NinjaAuth {
     if (!isRecord(result)) {
       throw NinjaAuthErrorException(
         "INVALID_RESPONSE",
-        "Il formato della risposta del servizio di autenticazione non \xE8 valido.",
+        "Il formato della risposta del servizio di autenticazione non \xC3\xA8 valido.",
         result
       );
     }
     if (!response.ok || result.success !== true) {
       throw NinjaAuthErrorException(
         "EXCHANGE_FAILED",
-        "Non \xE8 stato possibile completare l'autenticazione. Riprova.",
+        "Non \xC3\xA8 stato possibile completare l'autenticazione. Riprova.",
         result
       );
     }
@@ -404,6 +417,10 @@ var _NinjaAuth = class _NinjaAuth {
     }
     return result.data.user;
   }
+  /**
+   * terminates the user's session by sending a logout request to the server. It ensures that the SDK is initialized before proceeding and handles network errors, invalid responses, and logout failures.
+   * reurns {Promise<void>} A promise that resolves when the logout process is complete.
+   */
   async logout() {
     if (!this.ensureInitialized()) {
       throw NinjaAuthErrorException(
@@ -461,6 +478,10 @@ var _NinjaAuth = class _NinjaAuth {
       );
     }
   }
+  /**
+   * 
+   * @returns {Promise<NinjaSession>} A promise that resolves to the current session information, including authentication status, user profile, and session details.
+   */
   async getSession() {
     if (!this.ensureInitialized()) {
       throw NinjaAuthErrorException(

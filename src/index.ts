@@ -3,5 +3,6 @@ export { NinjaAuth } from "./NinjaAuth";
 
 export type {
     NinjaAuthConfig,
-    NinjaUser
+	NinjaUser,
+	NinjaSession
 } from "./types/types";
