@@ -1,7 +1,11 @@
 # NinjaAuth â€” Roadmap and implementation status (dev)
 
-> **Last reviewed:** 2 November 2026  
-> This is the only authoritative roadmap for the NinjaAuth SDK and its integration with Ninja Connect. The repository-root ROADMAP.md has been retired; use this document.
+> **Last reviewed:** 4 November 2026  
+> **Repository:** HanamiSoftware/NinjaAuth-SDK  
+> **Branches verified:** `dev` at `a8e79dceea72cbc8c2b0c69f897ec42c9e0ce9d4`; `master` at `96ff24ed380713ac08d9d78176f0636f69444b92`  
+> **Package/source version:** v0.1.0  
+
+This roadmap records the current branch distinction. `dev` and `master` are divergent in Git history; the source and test files reviewed for this audit are aligned, while `.github/workflows/sdk-ci.yml`, `docs/ROADMAP.md`, and `docs/TEST-PLAN.md` differ. `dev` contains the `workflow_dispatch` trigger that is not yet present on `master`.
 
 ## Executive status
 
@@ -29,11 +33,7 @@ The backend test results below are branch-only evidence. They have not been merg
 
 **PASS â€” focused integration tests**
 
-| Test | Invariant | Result |
-|---|---|---|
-| RT-001 â€” concurrent refresh | A stale concurrent invalid_grant must not revoke a session whose refresh token was already rotated by another request | PostgreSQL integration test passed |
-| RT-002 â€” logout during refresh | Logout must prevail over refresh operations that are still in flight; refresh must not reactivate the revoked local session | PostgreSQL integration test passed |
-| RT-003 â€” logout before resolver return | A session revoked before the resolver's final revalidation must not be returned as authenticated | Focused PostgreSQL integration test; CI owner-reported successful |
+**Execution evidence:** GitHub Actions run [#25](https://github.com/HanamiSoftware/NinjaAuth-SDK/actions/runs/41863128345) passed typecheck, build, and 37/37 tests on the `dev` commit `a8e79dceea72cbc8c2b0c69f897ec42c9e0ce9d4`. This is evidence for that exact `dev` commit only. No CI result was verified for the inspected `master` head `96ff24ed380713ac08d9d78176f0636f69444b92`; do not infer a pass on `master` from run #25.
 
 ## Test status
 
@@ -58,9 +58,12 @@ The implementation uses conditional database updates and a final session re-read
 
 - The logout route closes its database client in a `finally` block, including error paths.
 
-## Current SDK worktree snapshot
+### P0 — Keep automated SDK evidence current
 
-**Status boundary:** the repository's default branch may not yet contain the latest local edits described below. These notes record the developer's reported working-tree progress as of 1 November 2026; they are not a substitute for reviewing the synchronized source or running the complete validation suite.
+- [x] Run `npm run typecheck`, `npm run build`, and `npm test` on `dev` commit `a8e79dceea72cbc8c2b0c69f897ec42c9e0ce9d4`; GitHub Actions #25 passed 37/37 tests.
+- [ ] Obtain a CI result for the inspected `master` head `96ff24ed380713ac08d9d78176f0636f69444b92` or update `master` through the normal PR process and rerun CI.
+- [ ] Synchronize the `workflow_dispatch` trigger from `dev` to `master` through the normal PR process.
+- [ ] Keep test evidence tied to exact commit SHAs; do not infer success from the presence of test files.
 
 | Area | Current status | Notes |
 |---|---|---|
