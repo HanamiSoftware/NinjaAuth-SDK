@@ -1,3 +1,6 @@
+/**
+ *  
+ */
 import {
     buildAuthorizationUrl,
     parseAuthorizationCallback
@@ -82,6 +85,12 @@ function isNinjaSession(
     return value.user === null && value.session === null;
 }
 
+/**
+ * NinjaAuth is a singleton class that provides methods for user authentication and session management.
+ * @method init - Initializes the NinjaAuth instance with the provided configuration.
+ * @method login - Initiates the authentication flow for the user.
+ * @method logout - Terminates the user's session.
+ */
 export class NinjaAuth {
 
     private config: NinjaAuthConfig | null = null;
@@ -96,7 +105,14 @@ export class NinjaAuth {
     NinjaAuth.instance = this;
   }
 				
-
+	/**
+	 * initialize the NinjaAuth instance with the provided configuration.
+	 * @param config - The configuration object for initializing the NinjaAuth instance.
+	 * @param config.clientId - The client ID for the application.
+	 * @param config.redirectUri - The redirect URI for the application.
+	 * @param config.platform - The platform type, either "extension" or "web". Defaults to "extension".
+	 * @returns The initialized NinjaAuth instance.
+	 */
     public init(config: NinjaAuthConfig): NinjaAuth {
 
     if (this.config !== null) {
@@ -154,7 +170,11 @@ export class NinjaAuth {
     return this;
 }
 
-
+/**
+ * login initiates the authentication flow for the user. It generates a PKCE challenge and state, constructs the authorization URL, and launches the authorization flow. Upon successful authentication, it exchanges the authorization code for an access token and retrieves the user's profile information.
+ * 
+ * @returns {Promise<NinjaUser>} A promise that resolves to the authenticated user's profile information.
+ */
     public async login(): Promise<NinjaUser> {
 
         if (!this.ensureInitialized()) {
@@ -233,7 +253,7 @@ export class NinjaAuth {
             if (callback.state !== state) {
                 throw NinjaAuthErrorException(
                     "STATE_MISMATCH",
-                    "La verifica di sicurezza dell'autorizzazione non è riuscita."
+                    "La verifica di sicurezza dell'autorizzazione non Ã¨ riuscita."
                 );
             }
 
@@ -243,7 +263,7 @@ export class NinjaAuth {
             if (!returnedTransaction) {
                 throw NinjaAuthErrorException(
                     "TRANSACTION_NOT_FOUND",
-                    "La transazione di autorizzazione non è più disponibile."
+                    "La transazione di autorizzazione non Ã¨ piÃ¹ disponibile."
                 );
             }
 
@@ -270,7 +290,7 @@ export class NinjaAuth {
                 if (!hasPrimaryError) {
                     throw NinjaAuthErrorException(
                         "TRANSACTION_CLEANUP_FAILED",
-                        "Non è stato possibile eliminare la transazione OAuth.",
+                        "Non Ã¨ stato possibile eliminare la transazione OAuth.",
                         cleanupError
                     );
                 }
@@ -320,7 +340,7 @@ export class NinjaAuth {
             );
         }
 
-        // Response parsing
+        
         let result: unknown;
 
         try {
@@ -341,7 +361,7 @@ export class NinjaAuth {
 
             throw NinjaAuthErrorException(
                 "INVALID_RESPONSE",
-                "Il formato della risposta del servizio di autenticazione non è valido.",
+                "Il formato della risposta del servizio di autenticazione non Ã¨ valido.",
                 result
             );
         }
@@ -351,7 +371,7 @@ export class NinjaAuth {
 
             throw NinjaAuthErrorException(
                 "EXCHANGE_FAILED",
-                "Non è stato possibile completare l'autenticazione. Riprova.",
+                "Non Ã¨ stato possibile completare l'autenticazione. Riprova.",
                 result
             );
         }
@@ -372,7 +392,10 @@ export class NinjaAuth {
         return result.data.user;
     }
         
-
+		/**
+		 * terminates the user's session by sending a logout request to the server. It ensures that the SDK is initialized before proceeding and handles network errors, invalid responses, and logout failures.
+		 * reurns {Promise<void>} A promise that resolves when the logout process is complete.
+		 */
 
     public async logout(): Promise<void> {
 
@@ -446,7 +469,10 @@ export class NinjaAuth {
         }
     }
 
-
+		/**
+		 * 
+		 * @returns {Promise<NinjaSession>} A promise that resolves to the current session information, including authentication status, user profile, and session details.
+		 */
    public async getSession(): Promise<NinjaSession> {
 
     if (!this.ensureInitialized()) {
@@ -496,7 +522,6 @@ export class NinjaAuth {
         );
     }
 
-    // Only INVALID_SESSION means anonymous.
     if (
         response.status === 401 &&
         result.success === false &&
