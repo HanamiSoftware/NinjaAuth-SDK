@@ -12,6 +12,7 @@ interface WebCallbackMessage {
     type: typeof CALLBACK_MESSAGE_TYPE;
     code?: string;
     state?: string;
+    success?: boolean;
     error?: string;
     error_description?: string;
 }
@@ -24,7 +25,7 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
     /**
      * Open the blank popup synchronously while the caller still has the
      * browser's user-activation context. The authorization URL is assigned
-     * only after the asynchronous PKCE challenge has been generated.
+     * only after the asynchronous PKCE challenge and server transaction setup.
      */
     public prepareAuthorization(): WindowProxy {
         if (typeof window === "undefined" || typeof window.open !== "function") {
@@ -80,31 +81,42 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
 
         let authorizeUrl: URL;
         let redirectUri: URL;
+        let expectedState: string;
 
         try {
             authorizeUrl = new URL(authorizationUrl);
             const redirect = authorizeUrl.searchParams.get("redirect_uri");
-            if (!redirect) {
-                throw new Error("Missing redirect_uri");
+            expectedState = authorizeUrl.searchParams.get("state") ?? "";
+            if (!redirect || !expectedState) {
+                throw new Error("Missing redirect_uri or state");
             }
             redirectUri = new URL(redirect);
+            if (
+                redirectUri.protocol !== "https:" &&
+                redirectUri.hostname !== "localhost" &&
+                redirectUri.hostname !== "127.0.0.1"
+            ) {
+                throw new Error("OAuth callback must use HTTPS");
+            }
         } catch (error) {
             throw NinjaAuthErrorException(
                 "INVALID_CALLBACK",
-                "NinjaAuth: redirect URI non valido.",
+                "NinjaAuth: redirect URI o state non validi.",
                 error
             );
         }
 
-        if (
-            typeof window === "undefined" ||
-            redirectUri.origin !== window.location.origin
-        ) {
+        if (typeof window === "undefined") {
             throw NinjaAuthErrorException(
-                "CONFIGURATION",
-                "NinjaAuth Web richiede che redirectUri e pagina chiamante appartengano alla stessa origine."
+                "AUTHORIZATION_FAILED",
+                "NinjaAuth: il popup di autenticazione non è disponibile in questo contesto."
             );
         }
+
+        // The backend callback sets the application cookie, then redirects the
+        // popup to a tiny bridge page on the opener's origin. Only that bridge
+        // may message the opener; OAuth code and PKCE verifier never cross it.
+        const bridgeOrigin = window.location.origin;
 
         return new Promise<string>((resolve, reject) => {
             let settled = false;
@@ -125,31 +137,24 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
             const onMessage = (event: MessageEvent<unknown>) => {
                 if (
                     event.source !== popup ||
-                    event.origin !== redirectUri.origin ||
+                    event.origin !== bridgeOrigin ||
                     !isRecord(event.data) ||
-                    event.data.type !== CALLBACK_MESSAGE_TYPE
+                    event.data.type !== CALLBACK_MESSAGE_TYPE ||
+                    event.data.state !== expectedState
                 ) {
                     return;
                 }
 
-                const data = event.data;
-                const hasCode = typeof data.code === "string" && data.code.length > 0;
-                const hasError = typeof data.error === "string" && data.error.length > 0;
-
-                if (!hasCode && !hasError) return;
+                const hasSuccess = event.data.success === true;
+                const hasError = typeof event.data.error === "string" && event.data.error.length > 0;
+                if (!hasSuccess && !hasError) return;
 
                 const responseUrl = new URL(redirectUri.toString());
-
-                if (hasCode) responseUrl.searchParams.set("code", data.code as string);
-                if (typeof data.state === "string") {
-                    responseUrl.searchParams.set("state", data.state);
-                }
-                if (hasError) responseUrl.searchParams.set("error", data.error as string);
-                if (typeof data.error_description === "string") {
-                    responseUrl.searchParams.set(
-                        "error_description",
-                        data.error_description
-                    );
+                responseUrl.searchParams.set("state", expectedState);
+                if (hasSuccess) {
+                    responseUrl.searchParams.set("success", "true");
+                } else if (hasError) {
+                    responseUrl.searchParams.set("error", event.data.error as string);
                 }
 
                 finish(() => {
@@ -192,9 +197,8 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
 }
 
 /**
- * Call this function from the page configured as redirectUri.
- * It forwards only the authorization response to the opener; the PKCE
- * verifier and session credentials never enter the popup message.
+ * Legacy direct-callback helper. New backend-callback integrations should
+ * redirect to the application bridge page and must never forward the code.
  */
 export function completeWebAuthCallback(): void {
     if (typeof window === "undefined" || !window.opener) {
@@ -225,8 +229,6 @@ export function completeWebAuthCallback(): void {
         ...(errorDescription ? { error_description: errorDescription } : {})
     };
 
-    // Remove one-time OAuth values from the callback URL/history before
-    // the page can load any other application code or third-party resources.
     callbackUrl.searchParams.delete("code");
     callbackUrl.searchParams.delete("state");
     callbackUrl.searchParams.delete("error");
