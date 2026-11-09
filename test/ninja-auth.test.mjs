@@ -260,13 +260,11 @@ test("lifecycle methods reject calls before initialization", async () => {
     );
 });
 
-test("login explicitly rejects the not-yet-supported web platform", async () => {
-    const { auth } = await initialize({ platform: "web" });
+test("web platform initialization and callback helper are supported", async () => {
+    const { auth, completeWebAuthCallback } = await initialize({ platform: "web" });
 
-    await assert.rejects(
-        auth.login(),
-        (error) => error.code === "UNSUPPORTED_PLATFORM"
-    );
+    assert.equal(typeof auth.login, "function");
+    assert.equal(typeof completeWebAuthCallback, "function");
 });
 
 test("a failed init validation leaves the singleton available for a valid init", async () => {
