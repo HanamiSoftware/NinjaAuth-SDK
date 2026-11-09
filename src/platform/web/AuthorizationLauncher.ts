@@ -139,9 +139,17 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
                     event.source !== popup ||
                     event.origin !== bridgeOrigin ||
                     !isRecord(event.data) ||
-                    event.data.type !== CALLBACK_MESSAGE_TYPE ||
-                    event.data.state !== expectedState
+                    event.data.type !== CALLBACK_MESSAGE_TYPE
                 ) {
+                    return;
+                }
+
+                if (event.data.state !== expectedState) {
+                    finish(() => reject(NinjaAuthErrorException(
+                        "STATE_MISMATCH",
+                        "La verifica di sicurezza dell'autorizzazione non è riuscita."
+                    )));
+                    this.cancelAuthorization(popup);
                     return;
                 }
 
