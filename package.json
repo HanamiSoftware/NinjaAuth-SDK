@@ -13,7 +13,9 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "pretest": "npm run build",
+    "prepack": "npm run build"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.7",
