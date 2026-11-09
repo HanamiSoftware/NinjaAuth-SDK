@@ -953,7 +953,7 @@ test("web login reports a blocked popup", async () => {
     assert.equal(browser.values.size, 0);
 });
 
-test("web callback helper posts only code and state to the same origin and closes the popup", async () => {
+test("web callback bridge posts only state and outcome, never code or tokens", async () => {
     const { completeWebAuthCallback } = await createClient();
     let postedMessage;
     let targetOrigin;
@@ -963,7 +963,7 @@ test("web callback helper posts only code and state to the same origin and close
     globalThis.window = {
         location: {
             origin: "https://example.com",
-            href: "https://example.com/auth/callback?code=callback-code&state=callback-state"
+            href: "https://example.com/auth-callback.html?state=123e4567-e89b-12d3-a456-426614174000&result=success&code=must-not-be-forwarded"
         },
         history: {
             replaceState(_state, _title, url) {
@@ -985,11 +985,41 @@ test("web callback helper posts only code and state to the same origin and close
 
     assert.deepEqual(postedMessage, {
         type: "NINJA_AUTH_WEB_CALLBACK",
-        code: "callback-code",
-        state: "callback-state"
+        state: "123e4567-e89b-12d3-a456-426614174000",
+        success: true
     });
     assert.equal(targetOrigin, "https://example.com");
-    assert.equal(new URL(replacedUrl).searchParams.has("code"), false);
-    assert.equal(new URL(replacedUrl).searchParams.has("state"), false);
+    for (const key of ["code", "state", "result", "error"]) {
+        assert.equal(new URL(replacedUrl).searchParams.has(key), false);
+    }
     assert.equal(closed, true);
+});
+
+test("web callback bridge forwards a generic error without forwarding provider details", async () => {
+    const { completeWebAuthCallback } = await createClient();
+    let postedMessage;
+
+    globalThis.window = {
+        location: {
+            origin: "https://example.com",
+            href: "https://example.com/auth-callback.html?state=123e4567-e89b-12d3-a456-426614174000&result=error&error=access_denied"
+        },
+        history: {
+            replaceState() {}
+        },
+        opener: {
+            postMessage(message) {
+                postedMessage = message;
+            }
+        },
+        close() {}
+    };
+
+    completeWebAuthCallback();
+
+    assert.deepEqual(postedMessage, {
+        type: "NINJA_AUTH_WEB_CALLBACK",
+        state: "123e4567-e89b-12d3-a456-426614174000",
+        error: "access_denied"
+    });
 });
