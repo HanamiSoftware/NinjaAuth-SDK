@@ -35,6 +35,12 @@ The backend test results below are branch-only evidence. They have not been merg
 
 **Execution evidence:** GitHub Actions run [#25](https://github.com/HanamiSoftware/NinjaAuth-SDK/actions/runs/41863128345) passed typecheck, build, and 37/37 tests on the `dev` commit `a8e79dceea72cbc8c2b0c69f897ec42c9e0ce9d4`. This is evidence for that exact `dev` commit only. No CI result was verified for the inspected `master` head `96ff24ed380713ac08d9d78176f0636f69444b92`; do not infer a pass on `master` from run #25.
 
+## Web popup implementation branch — 9 November 2026
+
+The branch `feat/ninjaauth-web-popup-pkce-2026-11-09` adds the Web popup adapter without changing the Chrome adapter. The callback helper is exported from the package entry point. The verifier remains in the parent page's in-memory transaction store; only the authorization code, state, and provider error fields cross the popup message boundary. Automated tests cover popup opening, code exchange, state mismatch, popup blocking, callback messaging, and callback URL scrubbing.
+
+This is implementation status, not release readiness. A real browser run is still required to verify the provider preserves `window.opener` through cross-origin redirects, callback-page COOP behavior, exact-origin credentialed CORS, and acceptance/retention of the Ninja Connect HttpOnly cookie from the consuming application origin.
+
 ## Test status
 
 - RT-001/RT-002 branch: `test/auth-refresh-concurrency-rt001` in [NinjaURL-URL-Shortener](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener).
@@ -77,7 +83,7 @@ The implementation uses conditional database updates and a final session re-read
 | Code exchange | ðŸŸ¢ Implemented in SDK | Sends JSON with state, code, client_id, code_verifier, redirect_uri; validates envelope and `data.user`; E2E verification remains |
 | Session lookup | ðŸŸ¢ Implemented | Validates the response envelope and authenticated/anonymous `NinjaSession` payloads; mocked contract tests cover active, anonymous, invalid-session, and temporary-error outcomes |
 | Logout | ðŸŸ¢ Implemented in SDK | POSTs `/v1/logout` with credentials and resolves only after explicit `loggedOut: true` confirmation; mocked success and failure tests are in CI |
-| Web platform | ðŸŸ¡ Explicitly unsupported | `init()` accepts the platform value, but `login()` rejects with `UNSUPPORTED_PLATFORM`; Web authentication remains unimplemented |
+| Web platform | 🟡 Implemented on `feat/ninjaauth-web-popup-pkce-2026-11-09` | Popup Authorization Code + PKCE, same-origin callback helper, opener/source/origin checks, in-memory verifier storage, and SDK tests; live browser/provider/cookie verification remains open |
 | Endpoint configuration | ðŸŸ¢ Implemented | Preserves the local Wrangler endpoint and selects the production Ninja Connect API explicitly; production is the default |
 | SDK automated tests | ðŸŸ¡ Initial suite and CI implemented | Node.js test runner covers login/PKCE/state/exchange, session, logout, and selected failures; CI runs typecheck, build, and tests. Live Worker/provider E2E remains open |
 | Stable public API and release | ðŸ”´ Not ready | Session/logout behavior, platform handling, tests, public exports, and release criteria remain |
@@ -118,7 +124,7 @@ The implementation uses conditional database updates and a final session re-read
 ### P2 â€” Future scope
 
 - OIDC Discovery and provider interoperability behind Ninja Connect.
-- Web platform adapter and browser-level tests.
+- Web platform browser-level tests and live Ninja Connect cookie/CORS verification.
 - Account linking, MFA, passkeys, device management, and global logout.
 
 ## Evidence policy
