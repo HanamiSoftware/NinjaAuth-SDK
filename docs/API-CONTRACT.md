@@ -69,7 +69,7 @@ Origin: https://dashboard.ninjaurl.io
 }
 ```
 
-The endpoint does not accept an authorization code. The verifier is stored server-side for at most five minutes. A transaction is consumed atomically once; a replay or expired transaction is rejected.
+The endpoint does not accept an authorization code. If client_id is omitted, the exact callback URI must resolve to exactly one active registered client. The endpoint returns the resolved clientId. The verifier is stored server-side for at most five minutes. A transaction is consumed atomically once; a replay or expired transaction is rejected.
 
 ## Internal exchange contract
 
