@@ -109,7 +109,7 @@ export class NinjaAuth {
 	/**
 	 * initialize the NinjaAuth instance with the provided configuration.
 	 * @param config - The configuration object for initializing the NinjaAuth instance.
-	 * @param config.clientId - The client ID for the application.
+	 * @param config.clientId - The client ID for the application; optional for Web when callback lookup is unambiguous.
 	 * @param config.redirectUri - The redirect URI for the application.
 	 * @param config.platform - The platform type, either "extension" or "web". Defaults to "extension".
 	 * @param config.environment - The environment type, either "development" or "production". Defaults to "production".
