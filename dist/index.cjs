@@ -83,6 +83,7 @@ function buildAuthorizationUrl(request) {
   url.searchParams.set("client_id", request.clientId);
   url.searchParams.set("redirect_uri", request.redirectUri);
   url.searchParams.set("scope", request.scope);
+  url.searchParams.set("resource", request.resource || "");
   url.searchParams.set(
     "code_challenge",
     request.codeChallenge
