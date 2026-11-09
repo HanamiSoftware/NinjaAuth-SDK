@@ -7,8 +7,9 @@ This directory documents the SDK implementation on the branch being reviewed. Th
 | Document | Authority |
 |---|---|
 | [Roadmap](ROADMAP.md) | Authoritative status for this branch, including exact evidence, blockers, and priorities |
-| [API contract](API-CONTRACT.md) | SDK ↔ Worker request/response contract and public API shape |
-| [Architecture](ARCHITECTURE.md) | Stable responsibility boundaries and architectural decisions |
+| [API contract](API-CONTRACT.md) | Current SDK ↔ Worker request/response contract and public API shape |
+| [Architecture](ARCHITECTURE.md) | Current stable responsibility boundaries and architectural decisions |
+| [Application-owned session contract](APP-OWNED-SESSION-CONTRACT.md) | Proposed target contract for independent per-application sessions; not yet implemented |
 | [Development guide](DEVELOPMENT.md) | Local workflow and validation commands |
 | [Test plan](TEST-PLAN.md) | Automated regression coverage and Chrome/Worker integration matrix |
 | [Core checkpoint](NINJAAUTH-CORE-CHECKPOINT.md) | Historical snapshot; not a live status source |
