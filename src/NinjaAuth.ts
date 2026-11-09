@@ -198,21 +198,13 @@ export class NinjaAuth {
             const prepared = authorize.prepareAuthorization();
 
             try {
-                const { verifier, challenge } = await generatePKCE();
+                const { verifier } = await generatePKCE();
                 const state = generateState();
 
-                const registeredClientId = await this.registerWebTransaction(state, verifier);
-
-                const authorizationUrl = buildAuthorizationUrl({
-                    clientId: registeredClientId,
-                    redirectUri: this.config!.redirectUri,
-                    codeChallenge: challenge,
-                    state,
-                    scope: this.config!.scopes!.join(" ")
-                });
+                const authorizationUrl = await this.registerWebTransaction(state, verifier);
 
                 const responseUrl = await authorize.launchAuthorization(
-                    authorizationUrl.toString(),
+                    authorizationUrl,
                     prepared
                 );
                 const callbackUrl = new URL(responseUrl);
@@ -304,7 +296,8 @@ export class NinjaAuth {
                         state,
                         ...(this.config!.clientId ? { client_id: this.config!.clientId } : {}),
                         code_verifier: verifier,
-                        redirect_uri: this.config!.redirectUri
+                        redirect_uri: this.config!.redirectUri,
+                        scope: this.config!.scopes!.join(" ")
                     })
                 }
             );
@@ -333,7 +326,8 @@ export class NinjaAuth {
             result.success !== true ||
             !isRecord(result.data) ||
             typeof result.data.clientId !== "string" ||
-            result.data.clientId.length === 0
+            result.data.clientId.length === 0 ||
+            typeof result.data.authorizationUrl !== "string"
         ) {
             throw NinjaAuthErrorException(
                 "OAUTH_STATE_FAILED",
@@ -349,7 +343,30 @@ export class NinjaAuth {
             );
         }
 
-        return result.data.clientId;
+        let authorizationUrl: URL;
+        try {
+            authorizationUrl = new URL(result.data.authorizationUrl);
+        } catch (error) {
+            throw NinjaAuthErrorException(
+                "INVALID_RESPONSE",
+                "Ninja Connect ha restituito un URL di autorizzazione non valido.",
+                error
+            );
+        }
+
+        if (
+            authorizationUrl.origin !== NINJA_CONNECT.AUTHORIZATION_ENDPOINT ||
+            authorizationUrl.pathname !== "/oauth2/authorize" ||
+            authorizationUrl.searchParams.get("redirect_uri") !== "https://auth.ninjaconnect.io/call" ||
+            authorizationUrl.searchParams.get("state") !== state
+        ) {
+            throw NinjaAuthErrorException(
+                "INVALID_RESPONSE",
+                "Ninja Connect ha restituito un URL di autorizzazione non attendibile."
+            );
+        }
+
+        return authorizationUrl.toString();
     }
 
 
