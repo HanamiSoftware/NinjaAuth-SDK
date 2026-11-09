@@ -234,13 +234,14 @@ export function completeWebAuthCallback(): void {
     const message: WebCallbackMessage = {
         type: CALLBACK_MESSAGE_TYPE,
         state,
-        success: result === "success",
-        ...(result === "error" ? { error: error || "authentication_failed" } : {})
+        ...(result === "success"
+            ? { success: true }
+            : { error: error || "authentication_failed" })
     };
 
-    callbackUrl.searchParams.delete("state");
-    callbackUrl.searchParams.delete("result");
-    callbackUrl.searchParams.delete("error");
+    for (const key of ["code", "code_verifier", "access_token", "id_token", "refresh_token", "state", "result", "error"]) {
+        callbackUrl.searchParams.delete(key);
+    }
     window.history.replaceState(null, "", callbackUrl.toString());
 
     window.opener.postMessage(message, window.location.origin);
