@@ -957,12 +957,18 @@ test("web callback helper posts only code and state to the same origin and close
     const { completeWebAuthCallback } = await createClient();
     let postedMessage;
     let targetOrigin;
+    let replacedUrl;
     let closed = false;
 
     globalThis.window = {
         location: {
             origin: "https://example.com",
             href: "https://example.com/auth/callback?code=callback-code&state=callback-state"
+        },
+        history: {
+            replaceState(_state, _title, url) {
+                replacedUrl = url;
+            }
         },
         opener: {
             postMessage(message, origin) {
@@ -983,5 +989,7 @@ test("web callback helper posts only code and state to the same origin and close
         state: "callback-state"
     });
     assert.equal(targetOrigin, "https://example.com");
+    assert.equal(new URL(replacedUrl).searchParams.has("code"), false);
+    assert.equal(new URL(replacedUrl).searchParams.has("state"), false);
     assert.equal(closed, true);
 });
