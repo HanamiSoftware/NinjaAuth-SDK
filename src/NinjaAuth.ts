@@ -138,7 +138,7 @@ export class NinjaAuth {
         );
     }
 
-    if (!config.clientId) {
+    if (!config.clientId && !(supportedPlatforms === "web" && config.brokeredWeb)) {
         throw NinjaAuthErrorException(
             "CONFIGURATION",
             "NinjaAuth: clientId is required."
@@ -153,6 +153,13 @@ export class NinjaAuth {
     }
 
     const environment = config.environment ?? "production";
+
+    if (config.brokeredWeb && supportedPlatforms !== "web") {
+        throw NinjaAuthErrorException("CONFIGURATION", "NinjaAuth: brokeredWeb is available only on the web platform.");
+    }
+    if (config.brokeredWeb && !config.callbackOrigin && typeof window === "undefined") {
+        throw NinjaAuthErrorException("CONFIGURATION", "NinjaAuth: callbackOrigin is required outside a browser.");
+    }
 
     if (
         environment !== "development" &&
@@ -173,7 +180,11 @@ export class NinjaAuth {
         redirectUri: config.redirectUri,
         platform: supportedPlatforms,
         environment,
-				scopes: mergedScopes
+        scopes: mergedScopes,
+        brokeredWeb: config.brokeredWeb === true,
+        callbackOrigin: config.callbackOrigin ?? (typeof window !== "undefined" ? window.location.origin : undefined),
+        applicationApiBaseUrl: (config.applicationApiBaseUrl ?? NINJA_CONNECT.NINJAURL_API_BASE_URLS[environment]).replace(/\/$/, ""),
+        brokerApiBaseUrl: (config.brokerApiBaseUrl ?? NINJA_CONNECT.BROKER_API_BASE_URL).replace(/\/$/, "")
     };
 
     return this;
@@ -191,6 +202,9 @@ export class NinjaAuth {
                 "INITIALIZATION_FAILED",
                 "NinjaAuth: call init() before login()."
             );
+        }
+        if (this.config!.platform === "web" && this.config!.brokeredWeb) {
+            return this.loginWithBrokeredWebFlow();
         }
         if (this.config!.platform === "web") {
             const authorize = new WebAuthorizationLauncher();
@@ -229,6 +243,57 @@ export class NinjaAuth {
         );
     }
 
+
+    private async loginWithBrokeredWebFlow(): Promise<NinjaUser> {
+        const authorize = new WebAuthorizationLauncher();
+        const prepared = authorize.prepareAuthorization();
+        try {
+            const { verifier } = await generatePKCE();
+            const state = generateState();
+            const brokerBase = this.config!.brokerApiBaseUrl!;
+            const callbackOrigin = this.config!.callbackOrigin!;
+            let registration: Response;
+            try {
+                registration = await fetch(brokerBase + "/state", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        state,
+                        code_verifier: verifier,
+                        redirect_uri: this.config!.redirectUri,
+                        scope: this.config!.scopes!.join(" "),
+                        ...(this.config!.clientId ? { client_id: this.config!.clientId } : {})
+                    })
+                });
+            } catch (error) {
+                throw NinjaAuthErrorException("NETWORK", "NinjaAuth: impossibile contattare il broker di autenticazione.", error);
+            }
+            let envelope: unknown;
+            try { envelope = await registration.json(); }
+            catch (error) { throw NinjaAuthErrorException("INVALID_RESPONSE", "NinjaAuth: risposta non valida dal broker.", error); }
+            if (!isRecord(envelope) || !registration.ok || envelope.success !== true ||
+                !isRecord(envelope.data) || typeof envelope.data.authorizationUrl !== "string") {
+                throw NinjaAuthErrorException("AUTHORIZATION_FAILED", "NinjaAuth: il broker non ha avviato il login.", envelope);
+            }
+            const responseUrl = await authorize.launchAuthorization(envelope.data.authorizationUrl, prepared, callbackOrigin);
+            const callback = new URL(responseUrl);
+            if (callback.searchParams.get("state") !== state) {
+                throw NinjaAuthErrorException("STATE_MISMATCH", "NinjaAuth: verifica dello state non riuscita.");
+            }
+            if (callback.searchParams.get("success") !== "true") {
+                const reason = callback.searchParams.get("error") || "authentication_failed";
+                throw NinjaAuthErrorException(reason === "access_denied" ? "OAUTH_DENIED" : "AUTHORIZATION_FAILED", "NinjaAuth: autenticazione non completata.", reason);
+            }
+            const session = await this.getSession();
+            if (!session.authenticated || !session.user) {
+                throw NinjaAuthErrorException("SESSION_FAILED", "NinjaAuth: callback riuscito ma sessione applicativa non attiva.");
+            }
+            return session.user;
+        } catch (error) {
+            authorize.cancelAuthorization(prepared);
+            throw error;
+        }
+    }
 
     private ensureInitialized(): boolean {
         if (!this.config) {
@@ -438,9 +503,9 @@ export class NinjaAuth {
 
         try {
             response = await fetch(
-                getNinjaConnectEndpoints(
-                    this.config!.environment ?? "production"
-                ).logout,
+                this.config!.brokeredWeb
+                    ? this.config!.applicationApiBaseUrl + "/logout"
+                    : getNinjaConnectEndpoints(this.config!.environment ?? "production").logout,
                 {
                     method: "POST",
                     credentials: "include"
@@ -514,9 +579,9 @@ export class NinjaAuth {
 
     try {
         response = await fetch(
-            getNinjaConnectEndpoints(
-                this.config!.environment ?? "production"
-            ).session,
+            this.config!.brokeredWeb
+                ? this.config!.applicationApiBaseUrl + "/session"
+                : getNinjaConnectEndpoints(this.config!.environment ?? "production").session,
             {
                 method: "GET",
                 credentials: "include"
