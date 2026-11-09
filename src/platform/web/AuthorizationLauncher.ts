@@ -10,11 +10,9 @@ const CALLBACK_MESSAGE_TYPE = "NINJA_AUTH_WEB_CALLBACK";
 
 interface WebCallbackMessage {
     type: typeof CALLBACK_MESSAGE_TYPE;
-    code?: string;
-    state?: string;
+    state: string;
     success?: boolean;
     error?: string;
-    error_description?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -205,8 +203,9 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
 }
 
 /**
- * Legacy direct-callback helper. New backend-callback integrations should
- * redirect to the application bridge page and must never forward the code.
+ * Completes the same-origin bridge after the backend callback has exchanged
+ * the authorization code and established the application's HttpOnly session.
+ * The bridge forwards only state and the outcome; never code, tokens or cookies.
  */
 export function completeWebAuthCallback(): void {
     if (typeof window === "undefined" || !window.opener) {
@@ -217,30 +216,26 @@ export function completeWebAuthCallback(): void {
     }
 
     const callbackUrl = new URL(window.location.href);
-    const code = callbackUrl.searchParams.get("code");
     const state = callbackUrl.searchParams.get("state");
+    const result = callbackUrl.searchParams.get("result");
     const error = callbackUrl.searchParams.get("error");
-    const errorDescription = callbackUrl.searchParams.get("error_description");
 
-    if (!code && !error) {
+    if (!state || !/^[0-9a-f-]{36}$/i.test(state) || (result !== "success" && result !== "error")) {
         throw NinjaAuthErrorException(
             "INVALID_CALLBACK",
-            "NinjaAuth: la risposta OAuth non contiene né code né error."
+            "NinjaAuth: il bridge non contiene uno stato o un risultato valido."
         );
     }
 
     const message: WebCallbackMessage = {
         type: CALLBACK_MESSAGE_TYPE,
-        ...(code ? { code } : {}),
-        ...(state ? { state } : {}),
-        ...(error ? { error } : {}),
-        ...(errorDescription ? { error_description: errorDescription } : {})
+        state,
+        ...(result === "success" ? { success: true } : { error: error || "authentication_failed" })
     };
 
-    callbackUrl.searchParams.delete("code");
     callbackUrl.searchParams.delete("state");
+    callbackUrl.searchParams.delete("result");
     callbackUrl.searchParams.delete("error");
-    callbackUrl.searchParams.delete("error_description");
     window.history.replaceState(null, "", callbackUrl.toString());
 
     window.opener.postMessage(message, window.location.origin);
