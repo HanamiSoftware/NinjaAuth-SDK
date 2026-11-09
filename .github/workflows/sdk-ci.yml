@@ -1,6 +1,16 @@
 name: SDK CI
 
 on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "test/**"
+      - "docs/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "tsup.config.ts"
+      - ".github/workflows/sdk-ci.yml"
   push:
     paths:
       - "src/**"
