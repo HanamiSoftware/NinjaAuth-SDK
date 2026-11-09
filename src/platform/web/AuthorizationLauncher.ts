@@ -67,7 +67,8 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
 
     public async launchAuthorization(
         authorizationUrl: string,
-        prepared?: unknown
+        prepared?: unknown,
+        callbackOrigin?: string
     ): Promise<string> {
         const popup = prepared as WindowProxy | undefined;
 
@@ -96,9 +97,13 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
             );
         }
 
+        const expectedCallbackOrigin = callbackOrigin
+            ? new URL(callbackOrigin).origin
+            : redirectUri.origin;
+
         if (
             typeof window === "undefined" ||
-            redirectUri.origin !== window.location.origin
+            expectedCallbackOrigin !== window.location.origin
         ) {
             throw NinjaAuthErrorException(
                 "CONFIGURATION",
@@ -135,14 +140,18 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
                 const data = event.data;
                 const hasCode = typeof data.code === "string" && data.code.length > 0;
                 const hasError = typeof data.error === "string" && data.error.length > 0;
+                const hasResult = typeof data.success === "boolean";
 
-                if (!hasCode && !hasError) return;
+                if (!hasCode && !hasError && !hasResult) return;
 
-                const responseUrl = new URL(redirectUri.toString());
+                const responseUrl = new URL(expectedCallbackOrigin + "/");
 
                 if (hasCode) responseUrl.searchParams.set("code", data.code as string);
                 if (typeof data.state === "string") {
                     responseUrl.searchParams.set("state", data.state);
+                }
+                if (hasResult) {
+                    responseUrl.searchParams.set("success", String(data.success));
                 }
                 if (hasError) responseUrl.searchParams.set("error", data.error as string);
                 if (typeof data.error_description === "string") {
