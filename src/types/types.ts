@@ -1,6 +1,6 @@
 /**
  * NinjaAuthConfig defines the configuration options for initializing the NinjaAuth instance.
- * @param {string} clientId - The client ID for the application.
+ * @param {string} [clientId] - The client ID for the application; optional on Web when the exact callback resolves to one registered client.
  * @param {string} redirectUri - The redirect URI for the application.
  * @param {("extension" | "web")} [platform] - The platform type, either "extension" or "web". Defaults to "extension".
  * 
