@@ -3,11 +3,6 @@ import type {
     OAuthTransactionStorage
 } from "../../types/types";
 
-import {
-    NinjaAuthErrorException
-} from "../../errors/ErrorHandler";
-
-const PREFIX = "ninja_auth_oauth_";
 const MAX_TRANSACTION_AGE_MS = 10 * 60 * 1000;
 
 function isOAuthTransaction(value: unknown): value is OAuthTransaction {
@@ -26,83 +21,40 @@ function isOAuthTransaction(value: unknown): value is OAuthTransaction {
     );
 }
 
+/**
+ * Web transactions stay in the calling page's JavaScript memory.
+ * The parent page remains alive while the popup is active, so persistent
+ * browser storage is unnecessary and would expose the PKCE verifier to
+ * other same-origin scripts.
+ */
 export class WebOAuthTransactionStorage implements OAuthTransactionStorage {
-    private get storage(): Storage {
-        if (typeof window === "undefined" || !window.sessionStorage) {
-            throw NinjaAuthErrorException(
-                "AUTHORIZATION_FAILED",
-                "NinjaAuth: sessionStorage non è disponibile. Verifica le impostazioni privacy del browser."
-            );
-        }
-
-        return window.sessionStorage;
-    }
+    private readonly transactions = new Map<string, OAuthTransaction>();
 
     public async save(
         state: string,
         transaction: OAuthTransaction
     ): Promise<void> {
-        try {
-            this.storage.setItem(
-                `${PREFIX}${state}`,
-                JSON.stringify(transaction)
-            );
-        } catch (error) {
-            throw NinjaAuthErrorException(
-                "AUTHORIZATION_FAILED",
-                "NinjaAuth: impossibile salvare temporaneamente la transazione OAuth.",
-                error
-            );
-        }
+        this.transactions.set(state, transaction);
     }
 
     public async get(state: string): Promise<OAuthTransaction | null> {
-        const key = `${PREFIX}${state}`;
-        let serialized: string | null;
+        const transaction = this.transactions.get(state) ?? null;
 
-        try {
-            serialized = this.storage.getItem(key);
-        } catch (error) {
-            throw NinjaAuthErrorException(
-                "AUTHORIZATION_FAILED",
-                "NinjaAuth: impossibile leggere la transazione OAuth.",
-                error
-            );
-        }
-
-        if (!serialized) return null;
-
-        let parsed: unknown;
-        try {
-            parsed = JSON.parse(serialized);
-        } catch {
-            await this.remove(state);
+        if (!transaction || !isOAuthTransaction(transaction)) {
+            this.transactions.delete(state);
             return null;
         }
 
-        if (!isOAuthTransaction(parsed)) {
-            await this.remove(state);
-            return null;
-        }
-
-        const age = Date.now() - parsed.createdAt;
+        const age = Date.now() - transaction.createdAt;
         if (age < 0 || age > MAX_TRANSACTION_AGE_MS) {
-            await this.remove(state);
+            this.transactions.delete(state);
             return null;
         }
 
-        return parsed;
+        return transaction;
     }
 
     public async remove(state: string): Promise<void> {
-        try {
-            this.storage.removeItem(`${PREFIX}${state}`);
-        } catch (error) {
-            throw NinjaAuthErrorException(
-                "TRANSACTION_CLEANUP_FAILED",
-                "NinjaAuth: impossibile eliminare la transazione OAuth.",
-                error
-            );
-        }
+        this.transactions.delete(state);
     }
 }
