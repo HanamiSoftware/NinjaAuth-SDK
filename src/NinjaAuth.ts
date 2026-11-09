@@ -159,16 +159,16 @@ export class NinjaAuth {
             "NinjaAuth: environment must be 'development' or 'production'."
         );
     }
-			const defaultScopes = NINJA_CONNECT.DEFAULT_SCOPE.split(" ");
-			const scopes = config.scopes;
-			const mergedScopes = scopes ? [...new Set([...defaultScopes, ...scopes])].join(" ") : defaultScopes;
+			const defaultScopes = NINJA_CONNECT.DEFAULT_SCOPE ? NINJA_CONNECT.DEFAULT_SCOPE.split(" ") : [];
+			const userScopes = config.scopes ? config.scopes?.split(" ") : [];
+			const mergedScopes = [...new Set([...defaultScopes, ...userScopes])].join(" ");
 
     this.config = {
         clientId: config.clientId,
         redirectUri: config.redirectUri,
         platform: supportedPlatforms,
         environment,
-				scopes: mergedScopes.toString(),
+				scopes: mergedScopes,
 				resource: config.resource
     };
 
@@ -316,11 +316,11 @@ export class NinjaAuth {
 
         let response: Response;
 
-        // Network request
+        
         try {
 
             response = await fetch(
-                getNinjaConnectEndpoints(this.config!.environment ?? "production").exchange,
+                getNinjaConnectEndpoints(this.config!.environment!).exchange,
                 {
                     method: "POST",
                     credentials: "include",
@@ -332,7 +332,8 @@ export class NinjaAuth {
                         code,
                         client_id: this.config!.clientId,
                         code_verifier: verifier,
-                        redirect_uri: redirectUri
+                        redirect_uri: redirectUri,
+												resource: this.config!.resource ? this.config!.resource : undefined
                     })
                 }
             );

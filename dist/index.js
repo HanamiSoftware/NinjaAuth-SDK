@@ -257,15 +257,15 @@ var _NinjaAuth = class _NinjaAuth {
         "NinjaAuth: environment must be 'development' or 'production'."
       );
     }
-    const defaultScopes = NINJA_CONNECT.DEFAULT_SCOPE.split(" ");
-    const scopes = config.scopes;
-    const mergedScopes = scopes ? [.../* @__PURE__ */ new Set([...defaultScopes, ...scopes])].join(" ") : defaultScopes;
+    const defaultScopes = NINJA_CONNECT.DEFAULT_SCOPE ? NINJA_CONNECT.DEFAULT_SCOPE.split(" ") : [];
+    const userScopes = config.scopes ? config.scopes?.split(" ") : [];
+    const mergedScopes = [.../* @__PURE__ */ new Set([...defaultScopes, ...userScopes])].join(" ");
     this.config = {
       clientId: config.clientId,
       redirectUri: config.redirectUri,
       platform: supportedPlatforms,
       environment,
-      scopes: mergedScopes.toString(),
+      scopes: mergedScopes,
       resource: config.resource
     };
     return this;
@@ -367,7 +367,7 @@ var _NinjaAuth = class _NinjaAuth {
     let response;
     try {
       response = await fetch(
-        getNinjaConnectEndpoints(this.config.environment ?? "production").exchange,
+        getNinjaConnectEndpoints(this.config.environment).exchange,
         {
           method: "POST",
           credentials: "include",
@@ -379,7 +379,8 @@ var _NinjaAuth = class _NinjaAuth {
             code,
             client_id: this.config.clientId,
             code_verifier: verifier,
-            redirect_uri: redirectUri
+            redirect_uri: redirectUri,
+            resource: this.config.resource ? this.config.resource : void 0
           })
         }
       );
