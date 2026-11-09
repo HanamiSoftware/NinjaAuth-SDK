@@ -22,6 +22,7 @@ const AUTHENTICATED_SESSION = {
 
 let originalFetch;
 let originalChrome;
+let originalWindow;
 let chromeMock;
 let moduleSequence = 0;
 
@@ -35,13 +36,14 @@ function response(body, status = 200) {
 // Each test gets a fresh bundled module/runtime, so the singleton state from
 // one test cannot leak into another test.
 async function createClient() {
-    const { NinjaAuth } = await import(
+    const sdk = await import(
         "../dist/index.js?test=" + (++moduleSequence)
     );
 
     return {
-        NinjaAuth,
-        auth: new NinjaAuth()
+        NinjaAuth: sdk.NinjaAuth,
+        completeWebAuthCallback: sdk.completeWebAuthCallback,
+        auth: new sdk.NinjaAuth()
     };
 }
 
@@ -101,6 +103,7 @@ function createChromeMock() {
 test.beforeEach(() => {
     originalFetch = globalThis.fetch;
     originalChrome = globalThis.chrome;
+    originalWindow = globalThis.window;
     chromeMock = createChromeMock();
     globalThis.chrome = chromeMock;
 });
@@ -112,6 +115,12 @@ test.afterEach(() => {
         delete globalThis.chrome;
     } else {
         globalThis.chrome = originalChrome;
+    }
+
+    if (originalWindow === undefined) {
+        delete globalThis.window;
+    } else {
+        globalThis.window = originalWindow;
     }
 });
 
@@ -795,4 +804,184 @@ test("login, live session lookup, and logout complete in sequence", async () => 
         (request) => request.options.credentials === "include"
     ));
     assert.equal(chromeMock.transactions.size, 0);
+});
+
+
+function createWebWindowMock(options = {}) {
+    const listeners = new Set();
+    const values = new Map();
+    let openCount = 0;
+
+    const popup = {
+        closed: false,
+        location: {
+            replace(url) {
+                const authorizationUrl = new URL(url);
+                const redirectUri = new URL(
+                    authorizationUrl.searchParams.get("redirect_uri")
+                );
+                const state = options.stateTransform
+                    ? options.stateTransform(authorizationUrl.searchParams.get("state"))
+                    : authorizationUrl.searchParams.get("state");
+
+                queueMicrotask(() => {
+                    for (const listener of listeners) {
+                        listener({
+                            source: popup,
+                            origin: redirectUri.origin,
+                            data: {
+                                type: "NINJA_AUTH_WEB_CALLBACK",
+                                code: "web-authorization-code",
+                                state
+                            }
+                        });
+                    }
+                });
+            }
+        },
+        close() {
+            popup.closed = true;
+        }
+    };
+
+    const windowMock = {
+        location: {
+            origin: "https://example.com",
+            href: "https://example.com/"
+        },
+        sessionStorage: {
+            setItem(key, value) {
+                values.set(key, value);
+            },
+            getItem(key) {
+                return values.get(key) ?? null;
+            },
+            removeItem(key) {
+                values.delete(key);
+            }
+        },
+        open() {
+            openCount += 1;
+            return options.blockPopup ? null : popup;
+        },
+        addEventListener(type, listener) {
+            if (type === "message") listeners.add(listener);
+        },
+        removeEventListener(type, listener) {
+            if (type === "message") listeners.delete(listener);
+        },
+        setInterval: globalThis.setInterval.bind(globalThis),
+        clearInterval: globalThis.clearInterval.bind(globalThis),
+        setTimeout: globalThis.setTimeout.bind(globalThis),
+        clearTimeout: globalThis.clearTimeout.bind(globalThis)
+    };
+
+    return {
+        window: windowMock,
+        popup,
+        values,
+        get openCount() {
+            return openCount;
+        }
+    };
+}
+
+test("web login opens a popup synchronously, returns the code to the opener, and exchanges it", async () => {
+    const { auth } = await initialize({ platform: "web" });
+    const browser = createWebWindowMock();
+    globalThis.window = browser.window;
+
+    let exchangeBody;
+
+    globalThis.fetch = async (url, options) => {
+        assert.equal(url, "http://127.0.0.1:8787/v1/exchange");
+        assert.equal(options.credentials, "include");
+        exchangeBody = JSON.parse(options.body);
+        return response({
+            success: true,
+            data: { user: USER }
+        });
+    };
+
+    const loginPromise = auth.login();
+
+    // The popup must be opened before login() reaches its first await,
+    // otherwise browsers can reject it as an unsolicited popup.
+    assert.equal(browser.openCount, 1);
+
+    assert.deepEqual(await loginPromise, USER);
+    assert.equal(exchangeBody.code, "web-authorization-code");
+    assert.equal(exchangeBody.client_id, "test-client");
+    assert.equal(exchangeBody.redirect_uri, "https://example.com/callback");
+    assert.match(exchangeBody.code_verifier, /^[A-Za-z0-9_-]{43}$/);
+    assert.match(exchangeBody.state, /^[0-9a-f-]{36}$/i);
+    assert.equal(browser.popup.closed, true);
+    assert.equal(browser.values.size, 0);
+});
+
+test("web login rejects callback state mismatch without exchanging the code", async () => {
+    const { auth } = await initialize({ platform: "web" });
+    const browser = createWebWindowMock({
+        stateTransform: () => "attacker-controlled-state"
+    });
+    globalThis.window = browser.window;
+
+    globalThis.fetch = async () => {
+        assert.fail("Exchange must not run after a state mismatch");
+    };
+
+    await assert.rejects(
+        auth.login(),
+        (error) => error.code === "STATE_MISMATCH"
+    );
+
+    assert.equal(browser.popup.closed, true);
+    assert.equal(browser.values.size, 0);
+});
+
+test("web login reports a blocked popup", async () => {
+    const { auth } = await initialize({ platform: "web" });
+    const browser = createWebWindowMock({ blockPopup: true });
+    globalThis.window = browser.window;
+
+    await assert.rejects(
+        auth.login(),
+        (error) => error.code === "AUTHORIZATION_FAILED"
+    );
+
+    assert.equal(browser.openCount, 1);
+    assert.equal(browser.values.size, 0);
+});
+
+test("web callback helper posts only code and state to the same origin and closes the popup", async () => {
+    const { completeWebAuthCallback } = await createClient();
+    let postedMessage;
+    let targetOrigin;
+    let closed = false;
+
+    globalThis.window = {
+        location: {
+            origin: "https://example.com",
+            href: "https://example.com/auth/callback?code=callback-code&state=callback-state"
+        },
+        opener: {
+            postMessage(message, origin) {
+                postedMessage = message;
+                targetOrigin = origin;
+            }
+        },
+        close() {
+            closed = true;
+        }
+    };
+
+    completeWebAuthCallback();
+
+    assert.deepEqual(postedMessage, {
+        type: "NINJA_AUTH_WEB_CALLBACK",
+        code: "callback-code",
+        state: "callback-state"
+    });
+    assert.equal(targetOrigin, "https://example.com");
+    assert.equal(closed, true);
 });
