@@ -9,6 +9,8 @@ interface NinjaAuthConfig {
     redirectUri: string;
     platform?: "extension" | "web";
     environment?: "development" | "production";
+    scopes?: string;
+    resource?: string | undefined;
 }
 /**
  * NinjaUser represents the authenticated user's information.

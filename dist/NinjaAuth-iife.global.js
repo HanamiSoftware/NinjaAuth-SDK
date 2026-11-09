@@ -77,7 +77,7 @@
     } catch (error2) {
       throw NinjaAuthErrorException(
         "INVALID_CALLBACK",
-        "L'indirizzo di risposta dell'autorizzazione non \uFFFD valido.",
+        "L'indirizzo di risposta dell'autorizzazione non \xE8 valido.",
         error2
       );
     }
@@ -87,7 +87,7 @@
       if (error === "access_denied") {
         throw NinjaAuthErrorException(
           "OAUTH_DENIED",
-          "L'autorizzazione \uFFFD stata negata.",
+          "L'autorizzazione \xE8 stata negata.",
           error
         );
       }
@@ -101,14 +101,14 @@
     if (!code) {
       throw NinjaAuthErrorException(
         "INVALID_CALLBACK",
-        "Il codice di autorizzazione non \uFFFD presente nella risposta.",
+        "Il codice di autorizzazione non \xE8 presente nella risposta.",
         error
       );
     }
     if (!state) {
       throw NinjaAuthErrorException(
         "INVALID_CALLBACK",
-        "Lo state non \uFFFD presente nella risposta di autorizzazione.",
+        "Lo state non \xE8 presente nella risposta di autorizzazione.",
         error
       );
     }
@@ -252,18 +252,23 @@
           "NinjaAuth: redirectUri is required."
         );
       }
-      const environment = config.environment ?? "production";
+      const environment = config.environment ?? "development";
       if (environment !== "development" && environment !== "production") {
         throw NinjaAuthErrorException(
           "CONFIGURATION",
           "NinjaAuth: environment must be 'development' or 'production'."
         );
       }
+      const defaultScopes = NINJA_CONNECT.DEFAULT_SCOPE.split(" ");
+      const scopes = config.scopes;
+      const mergedScopes = scopes ? [.../* @__PURE__ */ new Set([...defaultScopes, ...scopes])].join(" ") : defaultScopes;
       this.config = {
         clientId: config.clientId,
         redirectUri: config.redirectUri,
         platform: supportedPlatforms,
-        environment
+        environment,
+        scopes: mergedScopes.toString(),
+        resource: config.resource
       };
       return this;
     }
@@ -309,7 +314,8 @@
         redirectUri: this.config.redirectUri,
         codeChallenge: challenge,
         state,
-        scope: NINJA_CONNECT.DEFAULT_SCOPE
+        scope: this.config.scopes,
+        resource: this.config.resource ? this.config.resource : void 0
       });
       const transaction = {
         verifier,
@@ -326,14 +332,14 @@
         if (callback.state !== state) {
           throw NinjaAuthErrorException(
             "STATE_MISMATCH",
-            "La verifica di sicurezza dell'autorizzazione non \xC3\xA8 riuscita."
+            "La verifica di sicurezza dell'autorizzazione non \xC3\u0192\xC2\xA8 riuscita."
           );
         }
         const returnedTransaction = await storage.get(state);
         if (!returnedTransaction) {
           throw NinjaAuthErrorException(
             "TRANSACTION_NOT_FOUND",
-            "La transazione di autorizzazione non \xC3\xA8 pi\xC3\xB9 disponibile."
+            "La transazione di autorizzazione non \xC3\u0192\xC2\xA8 pi\xC3\u0192\xC2\xB9 disponibile."
           );
         }
         return await this.exchangeCodeForToken(
@@ -352,7 +358,7 @@
           if (!hasPrimaryError) {
             throw NinjaAuthErrorException(
               "TRANSACTION_CLEANUP_FAILED",
-              "Non \xC3\xA8 stato possibile eliminare la transazione OAuth.",
+              "Non \xC3\u0192\xC2\xA8 stato possibile eliminare la transazione OAuth.",
               cleanupError
             );
           }
@@ -399,14 +405,14 @@
       if (!isRecord(result)) {
         throw NinjaAuthErrorException(
           "INVALID_RESPONSE",
-          "Il formato della risposta del servizio di autenticazione non \xC3\xA8 valido.",
+          "Il formato della risposta del servizio di autenticazione non \xC3\u0192\xC2\xA8 valido.",
           result
         );
       }
       if (!response.ok || result.success !== true) {
         throw NinjaAuthErrorException(
           "EXCHANGE_FAILED",
-          "Non \xC3\xA8 stato possibile completare l'autenticazione. Riprova.",
+          "Non \xC3\u0192\xC2\xA8 stato possibile completare l'autenticazione. Riprova.",
           result
         );
       }

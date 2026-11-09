@@ -148,7 +148,7 @@ export class NinjaAuth {
         );
     }
 
-    const environment = config.environment ?? "production";
+    const environment = config.environment ?? "development";
 
     if (
         environment !== "development" &&
@@ -159,12 +159,17 @@ export class NinjaAuth {
             "NinjaAuth: environment must be 'development' or 'production'."
         );
     }
+			const defaultScopes = NINJA_CONNECT.DEFAULT_SCOPE.split(" ");
+			const scopes = config.scopes;
+			const mergedScopes = scopes ? [...new Set([...defaultScopes, ...scopes])].join(" ") : defaultScopes;
 
     this.config = {
         clientId: config.clientId,
         redirectUri: config.redirectUri,
         platform: supportedPlatforms,
-        environment
+        environment,
+				scopes: mergedScopes.toString(),
+				resource: config.resource
     };
 
     return this;
@@ -225,7 +230,8 @@ export class NinjaAuth {
             redirectUri: this.config!.redirectUri,
             codeChallenge: challenge,
             state,
-            scope: NINJA_CONNECT.DEFAULT_SCOPE
+						scope: this.config!.scopes!,
+						resource: this.config!.resource ? this.config!.resource : undefined
         });
 
         const transaction = {
@@ -253,7 +259,7 @@ export class NinjaAuth {
             if (callback.state !== state) {
                 throw NinjaAuthErrorException(
                     "STATE_MISMATCH",
-                    "La verifica di sicurezza dell'autorizzazione non Ã¨ riuscita."
+                    "La verifica di sicurezza dell'autorizzazione non ÃƒÂ¨ riuscita."
                 );
             }
 
@@ -263,7 +269,7 @@ export class NinjaAuth {
             if (!returnedTransaction) {
                 throw NinjaAuthErrorException(
                     "TRANSACTION_NOT_FOUND",
-                    "La transazione di autorizzazione non Ã¨ piÃ¹ disponibile."
+                    "La transazione di autorizzazione non ÃƒÂ¨ piÃƒÂ¹ disponibile."
                 );
             }
 
@@ -290,7 +296,7 @@ export class NinjaAuth {
                 if (!hasPrimaryError) {
                     throw NinjaAuthErrorException(
                         "TRANSACTION_CLEANUP_FAILED",
-                        "Non Ã¨ stato possibile eliminare la transazione OAuth.",
+                        "Non ÃƒÂ¨ stato possibile eliminare la transazione OAuth.",
                         cleanupError
                     );
                 }
@@ -361,7 +367,7 @@ export class NinjaAuth {
 
             throw NinjaAuthErrorException(
                 "INVALID_RESPONSE",
-                "Il formato della risposta del servizio di autenticazione non Ã¨ valido.",
+                "Il formato della risposta del servizio di autenticazione non ÃƒÂ¨ valido.",
                 result
             );
         }
@@ -371,7 +377,7 @@ export class NinjaAuth {
 
             throw NinjaAuthErrorException(
                 "EXCHANGE_FAILED",
-                "Non Ã¨ stato possibile completare l'autenticazione. Riprova.",
+                "Non ÃƒÂ¨ stato possibile completare l'autenticazione. Riprova.",
                 result
             );
         }
