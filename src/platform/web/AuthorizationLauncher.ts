@@ -67,8 +67,7 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
 
     public async launchAuthorization(
         authorizationUrl: string,
-        prepared?: unknown,
-        callbackOrigin?: string
+        prepared?: unknown
     ): Promise<string> {
         const popup = prepared as WindowProxy | undefined;
 
@@ -97,13 +96,9 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
             );
         }
 
-        const expectedCallbackOrigin = callbackOrigin
-            ? new URL(callbackOrigin).origin
-            : redirectUri.origin;
-
         if (
             typeof window === "undefined" ||
-            expectedCallbackOrigin !== window.location.origin
+            redirectUri.origin !== window.location.origin
         ) {
             throw NinjaAuthErrorException(
                 "CONFIGURATION",
@@ -130,7 +125,7 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
             const onMessage = (event: MessageEvent<unknown>) => {
                 if (
                     event.source !== popup ||
-                    event.origin !== expectedCallbackOrigin ||
+                    event.origin !== redirectUri.origin ||
                     !isRecord(event.data) ||
                     event.data.type !== CALLBACK_MESSAGE_TYPE
                 ) {
@@ -140,18 +135,14 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
                 const data = event.data;
                 const hasCode = typeof data.code === "string" && data.code.length > 0;
                 const hasError = typeof data.error === "string" && data.error.length > 0;
-                const hasResult = typeof data.success === "boolean";
 
-                if (!hasCode && !hasError && !hasResult) return;
+                if (!hasCode && !hasError) return;
 
-                const responseUrl = new URL(expectedCallbackOrigin + "/");
+                const responseUrl = new URL(redirectUri.toString());
 
                 if (hasCode) responseUrl.searchParams.set("code", data.code as string);
                 if (typeof data.state === "string") {
                     responseUrl.searchParams.set("state", data.state);
-                }
-                if (hasResult) {
-                    responseUrl.searchParams.set("success", String(data.success));
                 }
                 if (hasError) responseUrl.searchParams.set("error", data.error as string);
                 if (typeof data.error_description === "string") {
