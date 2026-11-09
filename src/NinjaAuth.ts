@@ -313,7 +313,7 @@ export class NinjaAuth {
     ): Promise<NinjaUser> {
 
         const authorizationUrl = buildAuthorizationUrl({
-            clientId: this.config!.clientId,
+            clientId: this.config!.clientId ?? "",
             redirectUri: this.config!.redirectUri,
             codeChallenge: challenge,
             state,
