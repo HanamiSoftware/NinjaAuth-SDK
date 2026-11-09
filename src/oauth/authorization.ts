@@ -9,7 +9,7 @@ export interface AuthorizationRequest {
     state: string;
     codeChallenge: string;
     scope: string;
-		resource: string | undefined;
+		resource?: string;
 }
 
 export interface AuthorizationCallback {
@@ -28,8 +28,12 @@ export function buildAuthorizationUrl(
     url.searchParams.set("response_type", "code");
     url.searchParams.set("client_id", request.clientId);
     url.searchParams.set("redirect_uri", request.redirectUri);
-    url.searchParams.set("scope", request.scope);
-		url.searchParams.set("resource", request.resource || "");
+		url.searchParams.set("scope", request.scope);
+
+	if (request.resource) {
+		url.searchParams.set("resource", request.resource );
+		}
+		
     url.searchParams.set(
         "code_challenge",
         request.codeChallenge
