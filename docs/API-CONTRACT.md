@@ -41,9 +41,29 @@ The package entry point currently exports the types `NinjaAuthConfig` and `Ninja
 |---|---|---|
 | `new NinjaAuth()` | `NinjaAuth` | Returns the runtime singleton instance |
 | `init(config)` | `NinjaAuth` | Validates configuration and initializes the instance once |
-| `login()` | `Promise<NinjaUser>` | Starts interactive Chrome Extension Authorization Code + PKCE |
+| `login()` | `Promise<NinjaUser>` | Starts interactive Chrome Extension or Web popup Authorization Code + PKCE, based on `platform` |
 | `getSession()` | `Promise<NinjaSession>` | Observes the current server session; does not start login |
 | `logout()` | `Promise<void>` | Revokes the current cookie session and requires server confirmation |
+
+## Web popup callback contract
+
+For `platform: "web"`:
+
+1. `login()` opens a blank popup synchronously, before the first asynchronous PKCE operation, to preserve browser user activation.
+2. The SDK creates PKCE S256 and UUID state. The parent page stores the verifier, redirect URI, and creation time in its tab-scoped `sessionStorage`.
+3. The popup navigates to Ninja Connect authorization. The registered `redirectUri` must share the exact origin of the calling page.
+4. The application's callback page calls the exported `completeWebAuthCallback()` helper. It sends only `code`, `state`, and provider error fields to the opener, using the callback origin as `targetOrigin`, then closes.
+5. The opener accepts messages only from that popup window and the exact callback origin. The existing SDK callback parser checks provider errors and the SDK compares returned state with the initiating state before code exchange.
+6. The opener reads the PKCE verifier from its own `sessionStorage` and performs the existing credentialed `POST /v1/exchange`.
+
+The callback route must import and invoke:
+
+```ts
+import { completeWebAuthCallback } from "@ninjaconnect/auth";
+completeWebAuthCallback();
+```
+
+The popup message never contains the PKCE verifier, access/refresh tokens, or session cookie. The SDK does not read or persist the HttpOnly session cookie. Browser-level verification must still confirm that COOP does not sever `window.opener`, that the Worker permits credentialed CORS from the exact application origin, and that the browser accepts the cross-origin session cookie.
 
 ## Worker routes
 
