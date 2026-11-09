@@ -20,14 +20,6 @@ export const NINJA_CONNECT = {
         LOGOUT: "/logout"
     },
 
-    BROKER_API_BASE_URL:
-        "https://auth.ninjaconnect.io/v1",
-
-    NINJAURL_API_BASE_URLS: {
-        development: "http://127.0.0.1:8788/v1",
-        production: "https://api.ninjaurl.io/v1"
-    },
-
     DEFAULT_SCOPE:
         "openid profile email offline_access"
 } as const;
