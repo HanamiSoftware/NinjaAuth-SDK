@@ -70,7 +70,7 @@ loginButton.addEventListener("click", async () => {
 });
 ```
 
-`redirectUri` is the exact backend callback registered for this client. Before opening the provider, the SDK sends `state`, `client_id`, `code_verifier`, and `redirect_uri` to Ninja Connect's `/v1/state` endpoint. Ninja Connect validates the exact client/callback registration and stores the short-lived PKCE transaction server-side. The authorization code returns directly to the backend callback; it is never exposed to the opener page.
+`redirectUri` is the exact backend callback registered for this client. For Web, `clientId` may be omitted when that exact callback resolves to exactly one active internal client registration. Before opening the provider, the SDK sends `state`, `code_verifier`, and `redirect_uri` (plus `client_id` when explicitly configured) to Ninja Connect's `/v1/state` endpoint. Ninja Connect validates the exact client/callback registration and stores the short-lived PKCE transaction server-side. The authorization code returns directly to the backend callback; it is never exposed to the opener page.
 
 The NinjaURL callback backend calls Ninja Connect's protected internal exchange endpoint server-to-server. Ninja Connect atomically consumes the transaction, retrieves the verifier, and exchanges the code with AuthGear. NinjaURL then resolves the profile, creates its own application session, and sets an HttpOnly, Secure, host-only cookie on `api.ninjaurl.io`. It redirects the popup to a minimal bridge page on the Dashboard origin. The bridge sends only `state` and the success/error outcome through `postMessage`; it never forwards the code, verifier, access token, refresh token, or session cookie.
 
