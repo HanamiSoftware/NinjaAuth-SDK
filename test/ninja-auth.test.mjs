@@ -805,8 +805,21 @@ test("login, live session lookup, and logout complete in sequence", async () => 
 });
 
 
+function brokerAuthorizationUrl(state) {
+    const url = new URL("https://auth.ninjaconnect.io/oauth2/authorize");
+    url.searchParams.set("client_id", "shared-authgear-client");
+    url.searchParams.set("redirect_uri", "https://auth.ninjaconnect.io/call");
+    url.searchParams.set("state", state);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", "openid profile email offline_access");
+    url.searchParams.set("code_challenge", "test-challenge");
+    url.searchParams.set("code_challenge_method", "S256");
+    return url.toString();
+}
+
 function createWebWindowMock(options = {}) {
     const listeners = new Set();
+    let lastAuthorizationUrl;
     const values = new Map();
     let openCount = 0;
 
@@ -840,6 +853,7 @@ function createWebWindowMock(options = {}) {
         closed: false,
         location: {
             replace(url) {
+                lastAuthorizationUrl = url;
                 const authorizationUrl = new URL(url);
                 const state = options.stateTransform
                     ? options.stateTransform(authorizationUrl.searchParams.get("state"))
@@ -868,7 +882,8 @@ function createWebWindowMock(options = {}) {
         window: windowMock,
         popup,
         values,
-        get openCount() { return openCount; }
+        get openCount() { return openCount; },
+        get authorizationUrl() { return lastAuthorizationUrl; }
     };
 }
 
@@ -889,9 +904,17 @@ test("web login opens a popup synchronously and completes through the backend ca
             assert.equal(options.credentials, "omit");
             assert.equal(body.client_id, "test-client");
             assert.equal(body.redirect_uri, "https://api.example.com/v1/auth/callback");
+            assert.equal(body.scope, "openid profile email offline_access");
             assert.match(body.state, /^[0-9a-f-]{36}$/i);
             assert.match(body.code_verifier, /^[A-Za-z0-9_-]{43}$/);
-            return response({ success: true, data: { clientId: "test-client", expiresAt: Date.now() + 300000 } });
+            return response({
+                success: true,
+                data: {
+                    clientId: "test-client",
+                    authorizationUrl: brokerAuthorizationUrl(body.state),
+                    expiresAt: Date.now() + 300000
+                }
+            });
         }
         if (url === "https://api.example.com/v1/session") {
             assert.equal(options.method, "GET");
@@ -908,6 +931,11 @@ test("web login opens a popup synchronously and completes through the backend ca
         "http://127.0.0.1:8787/v1/state",
         "https://api.example.com/v1/session"
     ]);
+    const launchedUrl = new URL(browser.authorizationUrl);
+    assert.equal(launchedUrl.origin, "https://auth.ninjaconnect.io");
+    assert.equal(launchedUrl.pathname, "/oauth2/authorize");
+    assert.equal(launchedUrl.searchParams.get("client_id"), "shared-authgear-client");
+    assert.equal(launchedUrl.searchParams.get("redirect_uri"), "https://auth.ninjaconnect.io/call");
     assert.equal(browser.popup.closed, true);
     assert.equal(browser.values.size, 0);
 });
@@ -925,7 +953,13 @@ test("web login resolves its client ID from the exact registered callback when o
     globalThis.fetch = async (url, options) => {
         if (url === "http://127.0.0.1:8787/v1/state") {
             stateBody = JSON.parse(options.body);
-            return response({ success: true, data: { clientId: "resolved-client" } });
+            return response({
+                success: true,
+                data: {
+                    clientId: "resolved-client",
+                    authorizationUrl: brokerAuthorizationUrl(stateBody.state)
+                }
+            });
         }
         if (url === "https://api.example.com/v1/session") {
             return response({ success: true, data: AUTHENTICATED_SESSION });
@@ -952,7 +986,14 @@ test("web login rejects callback state mismatch after registering the server tra
     globalThis.fetch = async (url) => {
         stateRequests += 1;
         assert.equal(url, "http://127.0.0.1:8787/v1/state");
-        return response({ success: true, data: { clientId: "test-client" } });
+        const body = JSON.parse(arguments[1].body);
+        return response({
+            success: true,
+            data: {
+                clientId: "test-client",
+                authorizationUrl: brokerAuthorizationUrl(body.state)
+            }
+        });
     };
 
     await assert.rejects(
