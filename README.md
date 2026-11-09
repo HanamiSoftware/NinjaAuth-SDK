@@ -80,7 +80,7 @@ import { completeWebAuthCallback } from "@ninjaconnect/auth";
 completeWebAuthCallback();
 ```
 
-The helper forwards only `code`, `state`, and OAuth error fields to the opener using `postMessage`, then closes the popup. The main page checks the callback origin and popup window reference, validates `state`, retrieves the PKCE verifier from its own `sessionStorage`, and performs the code exchange. The verifier and session cookie are never sent in the popup message.
+The helper forwards only `code`, `state`, and OAuth error fields to the opener using `postMessage`, then closes the popup. The main page checks the callback origin and popup window reference, validates `state`, retrieves the PKCE verifier from its own in-memory transaction store, and performs the code exchange. The verifier and session cookie are never sent in the popup message.
 
 Keep the callback page minimal: do not load analytics or third-party scripts, use a `no-referrer` policy, and configure response headers so the provider's popup flow preserves the opener relationship (verify the effective Cross-Origin-Opener-Policy in a real browser). The Worker must also allow the exact application origin for credentialed CORS requests, and the browser must accept the session cookie from the Ninja Connect origin. These cookie/CORS conditions require live-browser verification; passing SDK mocks does not prove them.
 
