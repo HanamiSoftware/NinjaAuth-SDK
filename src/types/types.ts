@@ -6,11 +6,20 @@
  * 
  */
 export interface NinjaAuthConfig {
-    clientId: string;
+    clientId?: string;
+    /** Exact callback registered for the application backend. */
     redirectUri: string;
     platform?: "extension" | "web";
     environment?: "development" | "production";
-		scopes?: string[];
+    scopes?: string[];
+    /** Enables the brokered web flow; never used by the browser extension. */
+    brokeredWeb?: boolean;
+    /** Dashboard origin hosting /auth-callback.html. */
+    callbackOrigin?: string;
+    /** NinjaURL application API base, including /v1. */
+    applicationApiBaseUrl?: string;
+    /** Ninja Connect broker base, including /v1. */
+    brokerApiBaseUrl?: string;
 }
 
 /**
