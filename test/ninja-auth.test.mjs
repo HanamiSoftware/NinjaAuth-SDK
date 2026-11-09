@@ -983,10 +983,10 @@ test("web login rejects callback state mismatch after registering the server tra
     globalThis.window = browser.window;
     let stateRequests = 0;
 
-    globalThis.fetch = async (url) => {
+    globalThis.fetch = async (url, options) => {
         stateRequests += 1;
         assert.equal(url, "http://127.0.0.1:8787/v1/state");
-        const body = JSON.parse(arguments[1].body);
+        const body = JSON.parse(options.body);
         return response({
             success: true,
             data: {
