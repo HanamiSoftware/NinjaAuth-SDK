@@ -1,6 +1,6 @@
 # Ninja Connect Auth API — SDK/Worker Contract
 
-This document describes the server-side Web PKCE flow and the existing Chrome Extension flow. The runtime Auth Worker currently resides in [NinjaURL — Workers/auth-worker](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker); repository ownership and deployment remain separate from this SDK branch.
+This document describes the server-side Web PKCE flow and the existing Chrome Extension flow. The new broker runtime lives in [Ninja Connect — Workers/auth-broker](https://github.com/HanamiSoftware/Ninja-Connect/tree/main/Workers/auth-broker). The legacy NinjaURL Auth Worker continues to serve the existing Extension endpoints during this transition.
 
 ## Public SDK contract
 
