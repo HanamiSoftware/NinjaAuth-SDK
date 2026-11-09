@@ -1,7 +1,16 @@
 import { NINJA_CONNECT } from "../config";
 import { NinjaAuthErrorException } from "../errors/ErrorHandler";
-export interface AuthorizationLauncher{
-    launchAuthorization(authorizationUrl: string): Promise<string>;
+export interface AuthorizationLauncher {
+    /**
+     * Optional synchronous preparation for browser APIs that require
+     * transient user activation (for example window.open).
+     */
+    prepareAuthorization?(): unknown;
+    launchAuthorization(
+        authorizationUrl: string,
+        prepared?: unknown
+    ): Promise<string>;
+    cancelAuthorization?(prepared?: unknown): void;
 }
 export interface AuthorizationRequest {
     clientId: string;
