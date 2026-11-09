@@ -891,7 +891,7 @@ test("web login opens a popup synchronously and completes through the backend ca
             assert.equal(body.redirect_uri, "https://api.example.com/v1/auth/callback");
             assert.match(body.state, /^[0-9a-f-]{36}$/i);
             assert.match(body.code_verifier, /^[A-Za-z0-9_-]{43}$/);
-            return response({ success: true, data: { expiresAt: Date.now() + 300000 } });
+            return response({ success: true, data: { clientId: "test-client", expiresAt: Date.now() + 300000 } });
         }
         if (url === "https://api.example.com/v1/session") {
             assert.equal(options.method, "GET");
@@ -912,6 +912,32 @@ test("web login opens a popup synchronously and completes through the backend ca
     assert.equal(browser.values.size, 0);
 });
 
+test("web login resolves its client ID from the exact registered callback when omitted", async () => {
+    const { auth } = await initialize({
+        clientId: undefined,
+        platform: "web",
+        redirectUri: "https://api.example.com/v1/auth/callback"
+    });
+    const browser = createWebWindowMock();
+    globalThis.window = browser.window;
+    let stateBody;
+
+    globalThis.fetch = async (url, options) => {
+        if (url === "http://127.0.0.1:8787/v1/state") {
+            stateBody = JSON.parse(options.body);
+            return response({ success: true, data: { clientId: "resolved-client" } });
+        }
+        if (url === "https://api.example.com/v1/session") {
+            return response({ success: true, data: AUTHENTICATED_SESSION });
+        }
+        assert.fail("Unexpected SDK request: " + url);
+    };
+
+    assert.deepEqual(await auth.login(), USER);
+    assert.equal(Object.hasOwn(stateBody, "client_id"), false);
+    assert.equal(browser.popup.closed, true);
+});
+
 test("web login rejects callback state mismatch after registering the server transaction", async () => {
     const { auth } = await initialize({
         platform: "web",
@@ -926,7 +952,7 @@ test("web login rejects callback state mismatch after registering the server tra
     globalThis.fetch = async (url) => {
         stateRequests += 1;
         assert.equal(url, "http://127.0.0.1:8787/v1/state");
-        return response({ success: true, data: {} });
+        return response({ success: true, data: { clientId: "test-client" } });
     };
 
     await assert.rejects(
