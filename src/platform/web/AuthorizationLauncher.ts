@@ -220,17 +220,22 @@ export function completeWebAuthCallback(): void {
     const result = callbackUrl.searchParams.get("result");
     const error = callbackUrl.searchParams.get("error");
 
-    if (!state || !/^[0-9a-f-]{36}$/i.test(state) || (result !== "success" && result !== "error")) {
+    if (
+        !state ||
+        !/^[0-9a-f-]{36}$/i.test(state) ||
+        (result !== "success" && result !== "error")
+    ) {
         throw NinjaAuthErrorException(
             "INVALID_CALLBACK",
-            "NinjaAuth: il bridge non contiene uno stato o un risultato valido."
+            "NinjaAuth: il callback backend non contiene uno state o un risultato valido."
         );
     }
 
     const message: WebCallbackMessage = {
         type: CALLBACK_MESSAGE_TYPE,
         state,
-        ...(result === "success" ? { success: true } : { error: error || "authentication_failed" })
+        success: result === "success",
+        ...(result === "error" ? { error: error || "authentication_failed" } : {})
     };
 
     callbackUrl.searchParams.delete("state");
