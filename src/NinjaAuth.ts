@@ -137,10 +137,10 @@ export class NinjaAuth {
         );
     }
 
-    if (!config.clientId) {
+    if (!config.clientId && supportedPlatforms !== "web") {
         throw NinjaAuthErrorException(
             "CONFIGURATION",
-            "NinjaAuth: clientId is required."
+            "NinjaAuth: clientId is required for the Extension platform."
         );
     }
 
@@ -201,10 +201,10 @@ export class NinjaAuth {
                 const { verifier, challenge } = await generatePKCE();
                 const state = generateState();
 
-                await this.registerWebTransaction(state, verifier);
+                const registeredClientId = await this.registerWebTransaction(state, verifier);
 
                 const authorizationUrl = buildAuthorizationUrl({
-                    clientId: this.config!.clientId,
+                    clientId: registeredClientId,
                     redirectUri: this.config!.redirectUri,
                     codeChallenge: challenge,
                     state,
@@ -291,7 +291,7 @@ export class NinjaAuth {
         return `${callbackUrl.origin}/v1/${path}`;
     }
 
-    private async registerWebTransaction(state: string, verifier: string): Promise<void> {
+    private async registerWebTransaction(state: string, verifier: string): Promise<string> {
         let response: Response;
         try {
             response = await fetch(
@@ -302,7 +302,7 @@ export class NinjaAuth {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         state,
-                        client_id: this.config!.clientId,
+                        ...(this.config!.clientId ? { client_id: this.config!.clientId } : {}),
                         code_verifier: verifier,
                         redirect_uri: this.config!.redirectUri
                     })
@@ -327,13 +327,29 @@ export class NinjaAuth {
             );
         }
 
-        if (!isRecord(result) || !response.ok || result.success !== true) {
+        if (
+            !isRecord(result) ||
+            !response.ok ||
+            result.success !== true ||
+            !isRecord(result.data) ||
+            typeof result.data.clientId !== "string" ||
+            result.data.clientId.length === 0
+        ) {
             throw NinjaAuthErrorException(
                 "OAUTH_STATE_FAILED",
                 "Ninja Connect non ha potuto registrare la transazione OAuth.",
                 result
             );
         }
+
+        if (this.config!.clientId && result.data.clientId !== this.config!.clientId) {
+            throw NinjaAuthErrorException(
+                "OAUTH_CLIENT_MISMATCH",
+                "Ninja Connect ha risolto un client ID diverso da quello configurato."
+            );
+        }
+
+        return result.data.clientId;
     }
 
 
@@ -355,7 +371,7 @@ export class NinjaAuth {
     ): Promise<NinjaUser> {
 
         const authorizationUrl = buildAuthorizationUrl({
-            clientId: this.config!.clientId,
+            clientId: this.config!.clientId!,
             redirectUri: this.config!.redirectUri,
             codeChallenge: challenge,
             state,
