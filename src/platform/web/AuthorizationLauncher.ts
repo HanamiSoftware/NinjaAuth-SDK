@@ -26,7 +26,7 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
      * browser's user-activation context. The authorization URL is assigned
      * only after the asynchronous PKCE challenge has been generated.
      */
-    public prepareAuthorization(): Window {
+    public prepareAuthorization(): WindowProxy {
         if (typeof window === "undefined" || typeof window.open !== "function") {
             throw NinjaAuthErrorException(
                 "AUTHORIZATION_FAILED",
@@ -55,10 +55,10 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
             typeof prepared === "object" &&
             prepared !== null &&
             "close" in prepared &&
-            typeof (prepared as Window).close === "function"
+            typeof (prepared as WindowProxy).close === "function"
         ) {
             try {
-                (prepared as Window).close();
+                (prepared as WindowProxy).close();
             } catch {
                 // Closing a popup is best-effort cleanup.
             }
@@ -69,7 +69,7 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
         authorizationUrl: string,
         prepared?: unknown
     ): Promise<string> {
-        const popup = prepared as Window | undefined;
+        const popup = prepared as WindowProxy | undefined;
 
         if (!popup || popup.closed) {
             throw NinjaAuthErrorException(
@@ -224,6 +224,14 @@ export function completeWebAuthCallback(): void {
         ...(error ? { error } : {}),
         ...(errorDescription ? { error_description: errorDescription } : {})
     };
+
+    // Remove one-time OAuth values from the callback URL/history before
+    // the page can load any other application code or third-party resources.
+    callbackUrl.searchParams.delete("code");
+    callbackUrl.searchParams.delete("state");
+    callbackUrl.searchParams.delete("error");
+    callbackUrl.searchParams.delete("error_description");
+    window.history.replaceState(null, "", callbackUrl.toString());
 
     window.opener.postMessage(message, window.location.origin);
     window.close();
