@@ -810,53 +810,15 @@ function createWebWindowMock(options = {}) {
     const values = new Map();
     let openCount = 0;
 
-    const popup = {
-        closed: false,
-        location: {
-            replace(url) {
-                const authorizationUrl = new URL(url);
-                const redirectUri = new URL(
-                    authorizationUrl.searchParams.get("redirect_uri")
-                );
-                const state = options.stateTransform
-                    ? options.stateTransform(authorizationUrl.searchParams.get("state"))
-                    : authorizationUrl.searchParams.get("state");
-
-                queueMicrotask(() => {
-                    for (const listener of listeners) {
-                        listener({
-                            source: popup,
-                            origin: redirectUri.origin,
-                            data: {
-                                type: "NINJA_AUTH_WEB_CALLBACK",
-                                code: "web-authorization-code",
-                                state
-                            }
-                        });
-                    }
-                });
-            }
-        },
-        close() {
-            popup.closed = true;
-        }
-    };
-
     const windowMock = {
         location: {
             origin: "https://example.com",
             href: "https://example.com/"
         },
         sessionStorage: {
-            setItem(key, value) {
-                values.set(key, value);
-            },
-            getItem(key) {
-                return values.get(key) ?? null;
-            },
-            removeItem(key) {
-                values.delete(key);
-            }
+            setItem(key, value) { values.set(key, value); },
+            getItem(key) { return values.get(key) ?? null; },
+            removeItem(key) { values.delete(key); }
         },
         open() {
             openCount += 1;
@@ -874,58 +836,97 @@ function createWebWindowMock(options = {}) {
         clearTimeout: globalThis.clearTimeout.bind(globalThis)
     };
 
+    const popup = {
+        closed: false,
+        location: {
+            replace(url) {
+                const authorizationUrl = new URL(url);
+                const state = options.stateTransform
+                    ? options.stateTransform(authorizationUrl.searchParams.get("state"))
+                    : authorizationUrl.searchParams.get("state");
+
+                queueMicrotask(() => {
+                    for (const listener of listeners) {
+                        listener({
+                            source: popup,
+                            origin: windowMock.location.origin,
+                            data: {
+                                type: "NINJA_AUTH_WEB_CALLBACK",
+                                state,
+                                success: options.callbackError ? false : true,
+                                ...(options.callbackError ? { error: options.callbackError } : {})
+                            }
+                        });
+                    }
+                });
+            }
+        },
+        close() { popup.closed = true; }
+    };
+
     return {
         window: windowMock,
         popup,
         values,
-        get openCount() {
-            return openCount;
-        }
+        get openCount() { return openCount; }
     };
 }
 
-test("web login opens a popup synchronously, returns the code to the opener, and exchanges it", async () => {
-    const { auth } = await initialize({ platform: "web" });
+test("web login opens a popup synchronously and completes through the backend callback", async () => {
+    const { auth } = await initialize({
+        platform: "web",
+        redirectUri: "https://api.example.com/v1/auth/callback"
+    });
     const browser = createWebWindowMock();
     globalThis.window = browser.window;
 
-    let exchangeBody;
-
+    const requests = [];
     globalThis.fetch = async (url, options) => {
-        assert.equal(url, "http://127.0.0.1:8787/v1/exchange");
-        assert.equal(options.credentials, "include");
-        exchangeBody = JSON.parse(options.body);
-        return response({
-            success: true,
-            data: { user: USER }
-        });
+        requests.push({ url, options });
+        if (url === "http://127.0.0.1:8787/v1/state") {
+            const body = JSON.parse(options.body);
+            assert.equal(options.method, "POST");
+            assert.equal(options.credentials, "omit");
+            assert.equal(body.client_id, "test-client");
+            assert.equal(body.redirect_uri, "https://api.example.com/v1/auth/callback");
+            assert.match(body.state, /^[0-9a-f-]{36}$/i);
+            assert.match(body.code_verifier, /^[A-Za-z0-9_-]{43}$/);
+            return response({ success: true, data: { expiresAt: Date.now() + 300000 } });
+        }
+        if (url === "https://api.example.com/v1/session") {
+            assert.equal(options.method, "GET");
+            assert.equal(options.credentials, "include");
+            return response({ success: true, data: AUTHENTICATED_SESSION });
+        }
+        assert.fail("Unexpected SDK request: " + url);
     };
 
     const loginPromise = auth.login();
-
-    // The popup must be opened before login() reaches its first await,
-    // otherwise browsers can reject it as an unsolicited popup.
     assert.equal(browser.openCount, 1);
-
     assert.deepEqual(await loginPromise, USER);
-    assert.equal(exchangeBody.code, "web-authorization-code");
-    assert.equal(exchangeBody.client_id, "test-client");
-    assert.equal(exchangeBody.redirect_uri, "https://example.com/callback");
-    assert.match(exchangeBody.code_verifier, /^[A-Za-z0-9_-]{43}$/);
-    assert.match(exchangeBody.state, /^[0-9a-f-]{36}$/i);
+    assert.deepEqual(requests.map((item) => item.url), [
+        "http://127.0.0.1:8787/v1/state",
+        "https://api.example.com/v1/session"
+    ]);
     assert.equal(browser.popup.closed, true);
     assert.equal(browser.values.size, 0);
 });
 
-test("web login rejects callback state mismatch without exchanging the code", async () => {
-    const { auth } = await initialize({ platform: "web" });
+test("web login rejects callback state mismatch after registering the server transaction", async () => {
+    const { auth } = await initialize({
+        platform: "web",
+        redirectUri: "https://api.example.com/v1/auth/callback"
+    });
     const browser = createWebWindowMock({
         stateTransform: () => "attacker-controlled-state"
     });
     globalThis.window = browser.window;
+    let stateRequests = 0;
 
-    globalThis.fetch = async () => {
-        assert.fail("Exchange must not run after a state mismatch");
+    globalThis.fetch = async (url) => {
+        stateRequests += 1;
+        assert.equal(url, "http://127.0.0.1:8787/v1/state");
+        return response({ success: true, data: {} });
     };
 
     await assert.rejects(
@@ -933,6 +934,7 @@ test("web login rejects callback state mismatch without exchanging the code", as
         (error) => error.code === "STATE_MISMATCH"
     );
 
+    assert.equal(stateRequests, 1);
     assert.equal(browser.popup.closed, true);
     assert.equal(browser.values.size, 0);
 });
