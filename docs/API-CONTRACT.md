@@ -50,11 +50,11 @@ The package entry point currently exports the types `NinjaAuthConfig` and `Ninja
 For `platform: "web"`:
 
 1. `login()` opens a blank popup synchronously, before the first asynchronous PKCE operation, to preserve browser user activation.
-2. The SDK creates PKCE S256 and UUID state. The parent page stores the verifier, redirect URI, and creation time in its tab-scoped `sessionStorage`.
+2. The SDK creates PKCE S256 and UUID state. The parent page keeps the verifier, redirect URI, and creation time in an in-memory transaction store in the parent page.
 3. The popup navigates to Ninja Connect authorization. The registered `redirectUri` must share the exact origin of the calling page.
 4. The application's callback page calls the exported `completeWebAuthCallback()` helper. It sends only `code`, `state`, and provider error fields to the opener, using the callback origin as `targetOrigin`, then closes.
 5. The opener accepts messages only from that popup window and the exact callback origin. The existing SDK callback parser checks provider errors and the SDK compares returned state with the initiating state before code exchange.
-6. The opener reads the PKCE verifier from its own `sessionStorage` and performs the existing credentialed `POST /v1/exchange`.
+6. The opener reads the PKCE verifier from its own in-memory transaction store and performs the existing credentialed `POST /v1/exchange`.
 
 The callback route must import and invoke:
 
