@@ -1,3 +1,7 @@
+> **Superseded — do not implement this proposal.** The architecture has been clarified: Ninja Connect is the ecosystem Identity Provider, and first-party applications register their OAuth client ID and callback URI with Ninja Connect. NinjaAuth must not require an `apiBaseUrl`. The current target architecture is documented in [Ninja Connect — Internal OAuth clients](https://github.com/HanamiSoftware/Ninja-Connect/blob/docs/internal-oauth-clients-2026-11-09/docs/INTERNAL-OAUTH-CLIENTS.md). This file is retained only as a historical record of the earlier proposal.
+
+---
+
 # Application-Owned Session Contract
 
 **Status:** Proposed architecture contract  
