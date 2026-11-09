@@ -8,7 +8,8 @@ export interface AuthorizationLauncher {
     prepareAuthorization?(): unknown;
     launchAuthorization(
         authorizationUrl: string,
-        prepared?: unknown
+        prepared?: unknown,
+        callbackOrigin?: string
     ): Promise<string>;
     cancelAuthorization?(prepared?: unknown): void;
 }
