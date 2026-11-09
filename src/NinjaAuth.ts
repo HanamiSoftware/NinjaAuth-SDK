@@ -515,7 +515,7 @@ export class NinjaAuth {
     try {
         response = await fetch(
             getNinjaConnectEndpoints(
-                this.config!.environment ?? "development"
+                this.config!.environment ?? "production"
             ).session,
             {
                 method: "GET",
