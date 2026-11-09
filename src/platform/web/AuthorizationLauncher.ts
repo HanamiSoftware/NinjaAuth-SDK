@@ -130,7 +130,7 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
             const onMessage = (event: MessageEvent<unknown>) => {
                 if (
                     event.source !== popup ||
-                    event.origin !== redirectUri.origin ||
+                    event.origin !== expectedCallbackOrigin ||
                     !isRecord(event.data) ||
                     event.data.type !== CALLBACK_MESSAGE_TYPE
                 ) {
