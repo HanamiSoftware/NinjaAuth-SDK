@@ -10,7 +10,8 @@ export interface NinjaAuthConfig {
     redirectUri: string;
     platform?: "extension" | "web";
     environment?: "development" | "production";
-		scopes?: string[];
+		scopes?: string;
+		resource?: string | undefined;
 }
 
 /**

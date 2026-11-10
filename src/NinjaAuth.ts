@@ -150,7 +150,7 @@ export class NinjaAuth {
         );
     }
 
-    const environment = config.environment ?? "production";
+    const environment = config.environment ?? "development";
 
     if (
         environment !== "development" &&
@@ -161,6 +161,9 @@ export class NinjaAuth {
             "NinjaAuth: environment must be 'development' or 'production'."
         );
     }
+			const defaultScopes = NINJA_CONNECT.DEFAULT_SCOPE ? NINJA_CONNECT.DEFAULT_SCOPE.split(" ") : [];
+			const userScopes = config.scopes ? config.scopes?.split(" ") : [];
+			const mergedScopes = [...new Set([...defaultScopes, ...userScopes])].join(" ");
 
 			const defaultScopes = NINJA_CONNECT.DEFAULT_SCOPE.split(" ");
 			const scopes = config.scopes ?? defaultScopes;
@@ -171,7 +174,8 @@ export class NinjaAuth {
         redirectUri: config.redirectUri,
         platform: supportedPlatforms,
         environment,
-				scopes: mergedScopes
+				scopes: mergedScopes,
+				resource: config.resource
     };
 
     return this;
@@ -232,7 +236,8 @@ export class NinjaAuth {
             redirectUri: this.config!.redirectUri,
             codeChallenge: challenge,
             state,
-						scope: this.config!.scopes!.join(" ")
+						scope: this.config!.scopes!,
+						resource: this.config!.resource ? this.config!.resource : undefined
         });
 
         const transaction = {
@@ -317,11 +322,11 @@ export class NinjaAuth {
 
         let response: Response;
 
-        // Network request
+        
         try {
 
             response = await fetch(
-                getNinjaConnectEndpoints(this.config!.environment ?? "production").exchange,
+                getNinjaConnectEndpoints(this.config!.environment!).exchange,
                 {
                     method: "POST",
                     credentials: "include",
@@ -333,7 +338,8 @@ export class NinjaAuth {
                         code,
                         client_id: this.config!.clientId,
                         code_verifier: verifier,
-                        redirect_uri: redirectUri
+                        redirect_uri: redirectUri,
+												resource: this.config!.resource ? this.config!.resource : undefined
                     })
                 }
             );

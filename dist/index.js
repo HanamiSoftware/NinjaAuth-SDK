@@ -57,6 +57,9 @@ function buildAuthorizationUrl(request) {
   url.searchParams.set("client_id", request.clientId);
   url.searchParams.set("redirect_uri", request.redirectUri);
   url.searchParams.set("scope", request.scope);
+  if (request.resource) {
+    url.searchParams.set("resource", request.resource);
+  }
   url.searchParams.set(
     "code_challenge",
     request.codeChallenge
@@ -252,22 +255,23 @@ var _NinjaAuth = class _NinjaAuth {
         "NinjaAuth: redirectUri is required."
       );
     }
-    const environment = config.environment ?? "production";
+    const environment = config.environment ?? "development";
     if (environment !== "development" && environment !== "production") {
       throw NinjaAuthErrorException(
         "CONFIGURATION",
         "NinjaAuth: environment must be 'development' or 'production'."
       );
     }
-    const defaultScopes = NINJA_CONNECT.DEFAULT_SCOPE.split(" ");
-    const scopes = config.scopes ?? defaultScopes;
-    const mergedScopes = Array.from(/* @__PURE__ */ new Set([...defaultScopes, ...scopes]));
+    const defaultScopes = NINJA_CONNECT.DEFAULT_SCOPE ? NINJA_CONNECT.DEFAULT_SCOPE.split(" ") : [];
+    const userScopes = config.scopes ? config.scopes?.split(" ") : [];
+    const mergedScopes = [.../* @__PURE__ */ new Set([...defaultScopes, ...userScopes])].join(" ");
     this.config = {
       clientId: config.clientId,
       redirectUri: config.redirectUri,
       platform: supportedPlatforms,
       environment,
-      scopes: mergedScopes
+      scopes: mergedScopes,
+      resource: config.resource
     };
     return this;
   }
@@ -313,7 +317,8 @@ var _NinjaAuth = class _NinjaAuth {
       redirectUri: this.config.redirectUri,
       codeChallenge: challenge,
       state,
-      scope: this.config.scopes.join(" ")
+      scope: this.config.scopes,
+      resource: this.config.resource ? this.config.resource : void 0
     });
     const transaction = {
       verifier,
@@ -367,7 +372,7 @@ var _NinjaAuth = class _NinjaAuth {
     let response;
     try {
       response = await fetch(
-        getNinjaConnectEndpoints(this.config.environment ?? "production").exchange,
+        getNinjaConnectEndpoints(this.config.environment).exchange,
         {
           method: "POST",
           credentials: "include",
@@ -379,7 +384,8 @@ var _NinjaAuth = class _NinjaAuth {
             code,
             client_id: this.config.clientId,
             code_verifier: verifier,
-            redirect_uri: redirectUri
+            redirect_uri: redirectUri,
+            resource: this.config.resource ? this.config.resource : void 0
           })
         }
       );
