@@ -111,6 +111,8 @@ export class NinjaAuth {
 	 * @param config.clientId - The client ID for the application.
 	 * @param config.redirectUri - The redirect URI for the application.
 	 * @param config.platform - The platform type, either "extension" or "web". Defaults to "extension".
+	 * @param config.environment - The environment type, either "development" or "production". Defaults to "production".
+	 * @param config.scopes - An optional array of scopes for the authentication request.
 	 * @returns The initialized NinjaAuth instance.
 	 */
     public init(config: NinjaAuthConfig): NinjaAuth {
@@ -162,6 +164,10 @@ export class NinjaAuth {
 			const defaultScopes = NINJA_CONNECT.DEFAULT_SCOPE ? NINJA_CONNECT.DEFAULT_SCOPE.split(" ") : [];
 			const userScopes = config.scopes ? config.scopes?.split(" ") : [];
 			const mergedScopes = [...new Set([...defaultScopes, ...userScopes])].join(" ");
+
+			const defaultScopes = NINJA_CONNECT.DEFAULT_SCOPE.split(" ");
+			const scopes = config.scopes ?? defaultScopes;
+			const mergedScopes = Array.from(new Set([...defaultScopes, ...scopes]));
 
     this.config = {
         clientId: config.clientId,
@@ -494,7 +500,7 @@ export class NinjaAuth {
     try {
         response = await fetch(
             getNinjaConnectEndpoints(
-                this.config!.environment ?? "production"
+                this.config!.environment ?? "development"
             ).session,
             {
                 method: "GET",

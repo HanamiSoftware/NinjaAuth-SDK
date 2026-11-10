@@ -1,4 +1,4 @@
-# NinjaAuth — Test Plan (dev)
+# NinjaAuth â€” Test Plan (dev)
 
 This plan separates deterministic SDK regression tests from real Chrome/Worker integration checks. A passing mock suite does not prove cookie, CORS, browser, or provider behavior.
 
@@ -22,7 +22,7 @@ The suite imports the built SDK entry point with a fresh module identity for eac
 | OAuth | Authorization Code + PKCE S256; state and verifier format; callback state validation; access_denied |
 | Exchange | correct request body, endpoint and credentials; exchange errors and network failures |
 | Cleanup | transaction removed; primary failure preserved; cleanup failure after successful exchange is reported |
-| Lifecycle | mocked login → getSession → logout sequence |
+| Lifecycle | mocked login â†’ getSession â†’ logout sequence |
 
 ### Required local execution
 
@@ -36,7 +36,7 @@ npm test
 
 Record the commit SHA and complete output. Do not mark the suite green until all three commands finish successfully.
 
-### Verified CI evidence — 4 November 2026
+### Verified CI evidence â€” 4 November 2026
 
 - Repository: `HanamiSoftware/NinjaAuth-SDK`
 - Branch: `dev`
@@ -44,7 +44,7 @@ Record the commit SHA and complete output. Do not mark the suite green until all
 - Workflow: `SDK CI`, run [#25](https://github.com/HanamiSoftware/NinjaAuth-SDK/actions/runs/41863128345)
 - Event: `push` (the commit itself adds `workflow_dispatch` for future manual runs)
 - Result: completed / success
-- Steps: `npm ci`, `npm run typecheck`, `npm run build`, `npm test` — all successful
+- Steps: `npm ci`, `npm run typecheck`, `npm run build`, `npm test` â€” all successful
 - Test summary: 37 passed, 0 failed, 0 skipped
 
 This verifies the SDK checks on `dev`. It does not replace the Chrome/Worker integration matrix below and does not prove cookie, CORS, provider, or live browser behavior.

@@ -251,6 +251,8 @@ var _NinjaAuth = class _NinjaAuth {
    * @param config.clientId - The client ID for the application.
    * @param config.redirectUri - The redirect URI for the application.
    * @param config.platform - The platform type, either "extension" or "web". Defaults to "extension".
+   * @param config.environment - The environment type, either "development" or "production". Defaults to "production".
+   * @param config.scopes - An optional array of scopes for the authentication request.
    * @returns The initialized NinjaAuth instance.
    */
   init(config) {
@@ -529,7 +531,7 @@ var _NinjaAuth = class _NinjaAuth {
     try {
       response = await fetch(
         getNinjaConnectEndpoints(
-          this.config.environment ?? "production"
+          this.config.environment ?? "development"
         ).session,
         {
           method: "GET",

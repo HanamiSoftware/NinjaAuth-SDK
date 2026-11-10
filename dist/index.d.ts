@@ -3,6 +3,7 @@
  * @param {string} clientId - The client ID for the application.
  * @param {string} redirectUri - The redirect URI for the application.
  * @param {("extension" | "web")} [platform] - The platform type, either "extension" or "web". Defaults to "extension".
+ *
  */
 interface NinjaAuthConfig {
     clientId: string;
@@ -58,6 +59,8 @@ declare class NinjaAuth {
      * @param config.clientId - The client ID for the application.
      * @param config.redirectUri - The redirect URI for the application.
      * @param config.platform - The platform type, either "extension" or "web". Defaults to "extension".
+     * @param config.environment - The environment type, either "development" or "production". Defaults to "production".
+     * @param config.scopes - An optional array of scopes for the authentication request.
      * @returns The initialized NinjaAuth instance.
      */
     init(config: NinjaAuthConfig): NinjaAuth;
