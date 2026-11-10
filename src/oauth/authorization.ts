@@ -1,7 +1,16 @@
 import { NINJA_CONNECT } from "../config";
 import { NinjaAuthErrorException } from "../errors/ErrorHandler";
-export interface AuthorizationLauncher{
-    launchAuthorization(authorizationUrl: string): Promise<string>;
+export interface AuthorizationLauncher {
+    /**
+     * Optional synchronous preparation for browser APIs that require
+     * transient user activation (for example window.open).
+     */
+    prepareAuthorization?(): unknown;
+    launchAuthorization(
+        authorizationUrl: string,
+        prepared?: unknown
+    ): Promise<string>;
+    cancelAuthorization?(prepared?: unknown): void;
 }
 export interface AuthorizationRequest {
     clientId: string;
@@ -9,6 +18,7 @@ export interface AuthorizationRequest {
     state: string;
     codeChallenge: string;
     scope: string;
+		resource?: string;
 }
 
 export interface AuthorizationCallback {
@@ -27,7 +37,12 @@ export function buildAuthorizationUrl(
     url.searchParams.set("response_type", "code");
     url.searchParams.set("client_id", request.clientId);
     url.searchParams.set("redirect_uri", request.redirectUri);
-    url.searchParams.set("scope", request.scope);
+		url.searchParams.set("scope", request.scope);
+
+	if (request.resource) {
+		url.searchParams.set("resource", request.resource );
+		}
+		
     url.searchParams.set(
         "code_challenge",
         request.codeChallenge
@@ -57,7 +72,7 @@ export function parseAuthorizationCallback(
     } catch (error) {
         throw NinjaAuthErrorException(
             "INVALID_CALLBACK",
-            "L'indirizzo di risposta dell'autorizzazione non è valido.",
+            "L'indirizzo di risposta dell'autorizzazione non Ã¨ valido.",
             error
         );
     }
@@ -72,7 +87,7 @@ export function parseAuthorizationCallback(
         if (error === "access_denied") {
             throw NinjaAuthErrorException(
                 "OAUTH_DENIED",
-                "L'autorizzazione è stata negata.",
+                "L'autorizzazione Ã¨ stata negata.",
                 error
             );
         }
@@ -91,7 +106,7 @@ export function parseAuthorizationCallback(
     if (!code) {
         throw NinjaAuthErrorException(
             "INVALID_CALLBACK",
-            "Il codice di autorizzazione non è presente nella risposta.",
+            "Il codice di autorizzazione non Ã¨ presente nella risposta.",
             error
         );
     }
@@ -99,7 +114,7 @@ export function parseAuthorizationCallback(
     if (!state) {
         throw NinjaAuthErrorException(
             "INVALID_CALLBACK",
-            "Lo state non è presente nella risposta di autorizzazione.",
+            "Lo state non Ã¨ presente nella risposta di autorizzazione.",
             error
         );
     }

@@ -9,7 +9,7 @@ This roadmap records the current branch distinction. `dev` and `master` are dive
 
 ## Executive status
 
-NinjaAuth Core 0.1 is **not release-ready**. The central architecture is defined, three focused Auth Worker concurrency scenarios have passed PostgreSQL integration tests, and the SDK source already implements the main Chrome authorization-code flow, including PKCE, UUID state, callback-state comparison, JSON code exchange, and basic response validation. The remaining Core work is concentrated on environment-aware endpoint configuration, robust session handling, logout, end-to-end verification, automated SDK tests, and explicit handling of the not-yet-supported Web platform.
+NinjaAuth Core 0.1 is **not release-ready**. The Chrome Extension flow remains implemented, and this branch adds the Web backend-callback flow using server-side PKCE transaction storage, server-to-server code exchange, and an application-owned session cookie. Automated checks and real-browser/provider verification are still required.
 
 The backend test results below are branch-only evidence. They have not been merged or deployed.
 
@@ -17,11 +17,11 @@ The backend test results below are branch-only evidence. They have not been merg
 
 - Ninja Connect is the central Identity Broker for shared authentication, identity, and session lifecycle.
 - NinjaAuth is a client SDK and can be used by first-party Ninja products and independent third-party developers.
-- Ninja Connect owns shared identity and central session management; it does not own each application's business authorization.
+- Ninja Connect brokers upstream authentication and shared identity; each consuming application owns its own application session/cookie and business authorization.
 - Each consuming product owns its own profile, roles, permissions, capabilities, and application data.
 - The optional NinjaAppAdapter<TProfile> is an anti-contamination boundary for first-party product profiles. It is not an OAuth provider/platform adapter and is not required for standalone SDK use.
 - Product-specific RBAC must not be moved into Ninja Connect.
-- The experimental /v1/state endpoint is not a required part of the SDK flow and may be removed. Do not make the SDK depend on it without an explicit architecture decision.
+- The /v1/state endpoint is required by the Web server-side PKCE flow: it validates the exact registered callback and stores the verifier server-side for one-time consumption.
 - No Worker repository transfer, merge, or deployment is included in the completed test work.
 - AuthGear is the current upstream identity provider, not the owner of Ninja Connect application sessions. AuthGear SSO sessions and Ninja Connect `auth_sessions` records are separate lifecycles.
 - The public NinjaAuth API must remain provider-neutral. AuthGear-specific endpoints, credentials, refresh tokens, and provider secrets remain behind Ninja Connect; OIDC Discovery/interoperability is a planned capability.
@@ -34,6 +34,12 @@ The backend test results below are branch-only evidence. They have not been merg
 **PASS â€” focused integration tests**
 
 **Execution evidence:** GitHub Actions run [#25](https://github.com/HanamiSoftware/NinjaAuth-SDK/actions/runs/41863128345) passed typecheck, build, and 37/37 tests on the `dev` commit `a8e79dceea72cbc8c2b0c69f897ec42c9e0ce9d4`. This is evidence for that exact `dev` commit only. No CI result was verified for the inspected `master` head `96ff24ed380713ac08d9d78176f0636f69444b92`; do not infer a pass on `master` from run #25.
+
+## Web popup implementation branch — 9 November 2026
+
+The branch `feat/oauth-state-server-exchange-2026-11-09` replaces the earlier Web direct-exchange design. The SDK registers state, client ID, verifier, and exact backend callback with Ninja Connect. The backend callback receives the authorization code, calls the protected broker exchange server-to-server, creates the application session, and redirects to a same-origin bridge. Only state and outcome cross popup messaging; code, verifier, tokens, and cookie do not. The Chrome Extension flow is unchanged.
+
+This is implementation status, not release readiness. A real browser run is still required to verify popup opener preservation, callback-page COOP behavior, exact-origin CORS, API-host cookie acceptance, session refresh, and logout.
 
 ## Test status
 
@@ -77,7 +83,7 @@ The implementation uses conditional database updates and a final session re-read
 | Code exchange | ðŸŸ¢ Implemented in SDK | Sends JSON with state, code, client_id, code_verifier, redirect_uri; validates envelope and `data.user`; E2E verification remains |
 | Session lookup | ðŸŸ¢ Implemented | Validates the response envelope and authenticated/anonymous `NinjaSession` payloads; mocked contract tests cover active, anonymous, invalid-session, and temporary-error outcomes |
 | Logout | ðŸŸ¢ Implemented in SDK | POSTs `/v1/logout` with credentials and resolves only after explicit `loggedOut: true` confirmation; mocked success and failure tests are in CI |
-| Web platform | ðŸŸ¡ Explicitly unsupported | `init()` accepts the platform value, but `login()` rejects with `UNSUPPORTED_PLATFORM`; Web authentication remains unimplemented |
+| Web platform | 🟡 Implemented on `feat/oauth-state-server-exchange-2026-11-09` | Server-side state storage, backend callback, protected server-to-server exchange, application-owned API cookie, same-origin outcome bridge, and SDK tests; live browser/provider/cookie verification remains open |
 | Endpoint configuration | ðŸŸ¢ Implemented | Preserves the local Wrangler endpoint and selects the production Ninja Connect API explicitly; production is the default |
 | SDK automated tests | ðŸŸ¡ Initial suite and CI implemented | Node.js test runner covers login/PKCE/state/exchange, session, logout, and selected failures; CI runs typecheck, build, and tests. Live Worker/provider E2E remains open |
 | Stable public API and release | ðŸ”´ Not ready | Session/logout behavior, platform handling, tests, public exports, and release criteria remain |
@@ -118,7 +124,7 @@ The implementation uses conditional database updates and a final session re-read
 ### P2 â€” Future scope
 
 - OIDC Discovery and provider interoperability behind Ninja Connect.
-- Web platform adapter and browser-level tests.
+- Web platform browser-level tests and live NinjaURL cookie/CORS verification.
 - Account linking, MFA, passkeys, device management, and global logout.
 
 ## Evidence policy

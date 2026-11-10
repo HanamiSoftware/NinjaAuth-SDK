@@ -15,6 +15,7 @@ export const NINJA_CONNECT = {
     },
 
     API_PATHS: {
+        STATE: "/state",
         EXCHANGE: "/exchange",
         SESSION: "/session",
         LOGOUT: "/logout"
@@ -31,6 +32,7 @@ export function getNinjaConnectEndpoints(
         NINJA_CONNECT.API_BASE_URLS[environment];
 
     return {
+        state: `${baseUrl}${NINJA_CONNECT.API_PATHS.STATE}`,
         exchange: `${baseUrl}${NINJA_CONNECT.API_PATHS.EXCHANGE}`,
         session: `${baseUrl}${NINJA_CONNECT.API_PATHS.SESSION}`,
         logout: `${baseUrl}${NINJA_CONNECT.API_PATHS.LOGOUT}`

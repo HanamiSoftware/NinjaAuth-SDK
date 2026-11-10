@@ -59,6 +59,9 @@
     url.searchParams.set("client_id", request.clientId);
     url.searchParams.set("redirect_uri", request.redirectUri);
     url.searchParams.set("scope", request.scope);
+    if (request.resource) {
+      url.searchParams.set("resource", request.resource);
+    }
     url.searchParams.set(
       "code_challenge",
       request.codeChallenge
@@ -77,7 +80,7 @@
     } catch (error2) {
       throw NinjaAuthErrorException(
         "INVALID_CALLBACK",
-        "L'indirizzo di risposta dell'autorizzazione non \uFFFD valido.",
+        "L'indirizzo di risposta dell'autorizzazione non \xE8 valido.",
         error2
       );
     }
@@ -87,7 +90,7 @@
       if (error === "access_denied") {
         throw NinjaAuthErrorException(
           "OAUTH_DENIED",
-          "L'autorizzazione \uFFFD stata negata.",
+          "L'autorizzazione \xE8 stata negata.",
           error
         );
       }
@@ -101,14 +104,14 @@
     if (!code) {
       throw NinjaAuthErrorException(
         "INVALID_CALLBACK",
-        "Il codice di autorizzazione non \uFFFD presente nella risposta.",
+        "Il codice di autorizzazione non \xE8 presente nella risposta.",
         error
       );
     }
     if (!state) {
       throw NinjaAuthErrorException(
         "INVALID_CALLBACK",
-        "Lo state non \uFFFD presente nella risposta di autorizzazione.",
+        "Lo state non \xE8 presente nella risposta di autorizzazione.",
         error
       );
     }
@@ -224,6 +227,8 @@
      * @param config.clientId - The client ID for the application.
      * @param config.redirectUri - The redirect URI for the application.
      * @param config.platform - The platform type, either "extension" or "web". Defaults to "extension".
+     * @param config.environment - The environment type, either "development" or "production". Defaults to "production".
+     * @param config.scopes - An optional array of scopes for the authentication request.
      * @returns The initialized NinjaAuth instance.
      */
     init(config) {
@@ -252,18 +257,23 @@
           "NinjaAuth: redirectUri is required."
         );
       }
-      const environment = config.environment ?? "production";
+      const environment = config.environment ?? "development";
       if (environment !== "development" && environment !== "production") {
         throw NinjaAuthErrorException(
           "CONFIGURATION",
           "NinjaAuth: environment must be 'development' or 'production'."
         );
       }
+      const defaultScopes = NINJA_CONNECT.DEFAULT_SCOPE ? NINJA_CONNECT.DEFAULT_SCOPE.split(" ") : [];
+      const userScopes = config.scopes ? config.scopes?.split(" ") : [];
+      const mergedScopes = [.../* @__PURE__ */ new Set([...defaultScopes, ...userScopes])].join(" ");
       this.config = {
         clientId: config.clientId,
         redirectUri: config.redirectUri,
         platform: supportedPlatforms,
-        environment
+        environment,
+        scopes: mergedScopes,
+        resource: config.resource
       };
       return this;
     }
@@ -309,7 +319,8 @@
         redirectUri: this.config.redirectUri,
         codeChallenge: challenge,
         state,
-        scope: NINJA_CONNECT.DEFAULT_SCOPE
+        scope: this.config.scopes,
+        resource: this.config.resource ? this.config.resource : void 0
       });
       const transaction = {
         verifier,
@@ -326,14 +337,14 @@
         if (callback.state !== state) {
           throw NinjaAuthErrorException(
             "STATE_MISMATCH",
-            "La verifica di sicurezza dell'autorizzazione non \xC3\xA8 riuscita."
+            "La verifica di sicurezza dell'autorizzazione non \xC3\u0192\xC2\xA8 riuscita."
           );
         }
         const returnedTransaction = await storage.get(state);
         if (!returnedTransaction) {
           throw NinjaAuthErrorException(
             "TRANSACTION_NOT_FOUND",
-            "La transazione di autorizzazione non \xC3\xA8 pi\xC3\xB9 disponibile."
+            "La transazione di autorizzazione non \xC3\u0192\xC2\xA8 pi\xC3\u0192\xC2\xB9 disponibile."
           );
         }
         return await this.exchangeCodeForToken(
@@ -352,7 +363,7 @@
           if (!hasPrimaryError) {
             throw NinjaAuthErrorException(
               "TRANSACTION_CLEANUP_FAILED",
-              "Non \xC3\xA8 stato possibile eliminare la transazione OAuth.",
+              "Non \xC3\u0192\xC2\xA8 stato possibile eliminare la transazione OAuth.",
               cleanupError
             );
           }
@@ -363,7 +374,7 @@
       let response;
       try {
         response = await fetch(
-          getNinjaConnectEndpoints(this.config.environment ?? "production").exchange,
+          getNinjaConnectEndpoints(this.config.environment).exchange,
           {
             method: "POST",
             credentials: "include",
@@ -375,7 +386,8 @@
               code,
               client_id: this.config.clientId,
               code_verifier: verifier,
-              redirect_uri: redirectUri
+              redirect_uri: redirectUri,
+              resource: this.config.resource ? this.config.resource : void 0
             })
           }
         );
@@ -399,14 +411,14 @@
       if (!isRecord(result)) {
         throw NinjaAuthErrorException(
           "INVALID_RESPONSE",
-          "Il formato della risposta del servizio di autenticazione non \xC3\xA8 valido.",
+          "Il formato della risposta del servizio di autenticazione non \xC3\u0192\xC2\xA8 valido.",
           result
         );
       }
       if (!response.ok || result.success !== true) {
         throw NinjaAuthErrorException(
           "EXCHANGE_FAILED",
-          "Non \xC3\xA8 stato possibile completare l'autenticazione. Riprova.",
+          "Non \xC3\u0192\xC2\xA8 stato possibile completare l'autenticazione. Riprova.",
           result
         );
       }
@@ -495,7 +507,7 @@
       try {
         response = await fetch(
           getNinjaConnectEndpoints(
-            this.config.environment ?? "production"
+            this.config.environment ?? "development"
           ).session,
           {
             method: "GET",
