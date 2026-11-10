@@ -805,42 +805,23 @@ test("login, live session lookup, and logout complete in sequence", async () => 
 });
 
 
+function brokerAuthorizationUrl(state) {
+    const url = new URL("https://auth.ninjaconnect.io/oauth2/authorize");
+    url.searchParams.set("client_id", "shared-authgear-client");
+    url.searchParams.set("redirect_uri", "https://auth.ninjaconnect.io/call");
+    url.searchParams.set("state", state);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", "openid profile email offline_access");
+    url.searchParams.set("code_challenge", "test-challenge");
+    url.searchParams.set("code_challenge_method", "S256");
+    return url.toString();
+}
+
 function createWebWindowMock(options = {}) {
     const listeners = new Set();
+    let lastAuthorizationUrl;
     const values = new Map();
     let openCount = 0;
-
-    const popup = {
-        closed: false,
-        location: {
-            replace(url) {
-                const authorizationUrl = new URL(url);
-                const redirectUri = new URL(
-                    authorizationUrl.searchParams.get("redirect_uri")
-                );
-                const state = options.stateTransform
-                    ? options.stateTransform(authorizationUrl.searchParams.get("state"))
-                    : authorizationUrl.searchParams.get("state");
-
-                queueMicrotask(() => {
-                    for (const listener of listeners) {
-                        listener({
-                            source: popup,
-                            origin: redirectUri.origin,
-                            data: {
-                                type: "NINJA_AUTH_WEB_CALLBACK",
-                                code: "web-authorization-code",
-                                state
-                            }
-                        });
-                    }
-                });
-            }
-        },
-        close() {
-            popup.closed = true;
-        }
-    };
 
     const windowMock = {
         location: {
@@ -848,15 +829,9 @@ function createWebWindowMock(options = {}) {
             href: "https://example.com/"
         },
         sessionStorage: {
-            setItem(key, value) {
-                values.set(key, value);
-            },
-            getItem(key) {
-                return values.get(key) ?? null;
-            },
-            removeItem(key) {
-                values.delete(key);
-            }
+            setItem(key, value) { values.set(key, value); },
+            getItem(key) { return values.get(key) ?? null; },
+            removeItem(key) { values.delete(key); }
         },
         open() {
             openCount += 1;
@@ -874,58 +849,151 @@ function createWebWindowMock(options = {}) {
         clearTimeout: globalThis.clearTimeout.bind(globalThis)
     };
 
+    const popup = {
+        closed: false,
+        location: {
+            replace(url) {
+                lastAuthorizationUrl = url;
+                const authorizationUrl = new URL(url);
+                const state = options.stateTransform
+                    ? options.stateTransform(authorizationUrl.searchParams.get("state"))
+                    : authorizationUrl.searchParams.get("state");
+
+                queueMicrotask(() => {
+                    for (const listener of listeners) {
+                        listener({
+                            source: popup,
+                            origin: windowMock.location.origin,
+                            data: {
+                                type: "NINJA_AUTH_WEB_CALLBACK",
+                                state,
+                                success: options.callbackError ? false : true,
+                                ...(options.callbackError ? { error: options.callbackError } : {})
+                            }
+                        });
+                    }
+                });
+            }
+        },
+        close() { popup.closed = true; }
+    };
+
     return {
         window: windowMock,
         popup,
         values,
-        get openCount() {
-            return openCount;
-        }
+        get openCount() { return openCount; },
+        get authorizationUrl() { return lastAuthorizationUrl; }
     };
 }
 
-test("web login opens a popup synchronously, returns the code to the opener, and exchanges it", async () => {
-    const { auth } = await initialize({ platform: "web" });
+test("web login opens a popup synchronously and completes through the backend callback", async () => {
+    const { auth } = await initialize({
+        platform: "web",
+        redirectUri: "https://api.example.com/v1/auth/callback"
+    });
     const browser = createWebWindowMock();
     globalThis.window = browser.window;
 
-    let exchangeBody;
-
+    const requests = [];
     globalThis.fetch = async (url, options) => {
-        assert.equal(url, "http://127.0.0.1:8787/v1/exchange");
-        assert.equal(options.credentials, "include");
-        exchangeBody = JSON.parse(options.body);
-        return response({
-            success: true,
-            data: { user: USER }
-        });
+        requests.push({ url, options });
+        if (url === "http://127.0.0.1:8787/v1/state") {
+            const body = JSON.parse(options.body);
+            assert.equal(options.method, "POST");
+            assert.equal(options.credentials, "omit");
+            assert.equal(body.client_id, "test-client");
+            assert.equal(body.redirect_uri, "https://api.example.com/v1/auth/callback");
+            assert.equal(body.scope, "openid profile email offline_access");
+            assert.match(body.state, /^[0-9a-f-]{36}$/i);
+            assert.match(body.code_verifier, /^[A-Za-z0-9_-]{43}$/);
+            return response({
+                success: true,
+                data: {
+                    clientId: "test-client",
+                    authorizationUrl: brokerAuthorizationUrl(body.state),
+                    expiresAt: Date.now() + 300000
+                }
+            });
+        }
+        if (url === "https://api.example.com/v1/session") {
+            assert.equal(options.method, "GET");
+            assert.equal(options.credentials, "include");
+            return response({ success: true, data: AUTHENTICATED_SESSION });
+        }
+        assert.fail("Unexpected SDK request: " + url);
     };
 
     const loginPromise = auth.login();
-
-    // The popup must be opened before login() reaches its first await,
-    // otherwise browsers can reject it as an unsolicited popup.
     assert.equal(browser.openCount, 1);
-
     assert.deepEqual(await loginPromise, USER);
-    assert.equal(exchangeBody.code, "web-authorization-code");
-    assert.equal(exchangeBody.client_id, "test-client");
-    assert.equal(exchangeBody.redirect_uri, "https://example.com/callback");
-    assert.match(exchangeBody.code_verifier, /^[A-Za-z0-9_-]{43}$/);
-    assert.match(exchangeBody.state, /^[0-9a-f-]{36}$/i);
+    assert.deepEqual(requests.map((item) => item.url), [
+        "http://127.0.0.1:8787/v1/state",
+        "https://api.example.com/v1/session"
+    ]);
+    const launchedUrl = new URL(browser.authorizationUrl);
+    assert.equal(launchedUrl.origin, "https://auth.ninjaconnect.io");
+    assert.equal(launchedUrl.pathname, "/oauth2/authorize");
+    assert.equal(launchedUrl.searchParams.get("client_id"), "shared-authgear-client");
+    assert.equal(launchedUrl.searchParams.get("redirect_uri"), "https://auth.ninjaconnect.io/call");
     assert.equal(browser.popup.closed, true);
     assert.equal(browser.values.size, 0);
 });
 
-test("web login rejects callback state mismatch without exchanging the code", async () => {
-    const { auth } = await initialize({ platform: "web" });
+test("web login resolves its client ID from the exact registered callback when omitted", async () => {
+    const { auth } = await initialize({
+        clientId: undefined,
+        platform: "web",
+        redirectUri: "https://api.example.com/v1/auth/callback"
+    });
+    const browser = createWebWindowMock();
+    globalThis.window = browser.window;
+    let stateBody;
+
+    globalThis.fetch = async (url, options) => {
+        if (url === "http://127.0.0.1:8787/v1/state") {
+            stateBody = JSON.parse(options.body);
+            return response({
+                success: true,
+                data: {
+                    clientId: "resolved-client",
+                    authorizationUrl: brokerAuthorizationUrl(stateBody.state)
+                }
+            });
+        }
+        if (url === "https://api.example.com/v1/session") {
+            return response({ success: true, data: AUTHENTICATED_SESSION });
+        }
+        assert.fail("Unexpected SDK request: " + url);
+    };
+
+    assert.deepEqual(await auth.login(), USER);
+    assert.equal(Object.hasOwn(stateBody, "client_id"), false);
+    assert.equal(browser.popup.closed, true);
+});
+
+test("web login rejects callback state mismatch after registering the server transaction", async () => {
+    const { auth } = await initialize({
+        platform: "web",
+        redirectUri: "https://api.example.com/v1/auth/callback"
+    });
     const browser = createWebWindowMock({
         stateTransform: () => "attacker-controlled-state"
     });
     globalThis.window = browser.window;
+    let stateRequests = 0;
 
-    globalThis.fetch = async () => {
-        assert.fail("Exchange must not run after a state mismatch");
+    globalThis.fetch = async (url, options) => {
+        stateRequests += 1;
+        assert.equal(url, "http://127.0.0.1:8787/v1/state");
+        const body = JSON.parse(options.body);
+        return response({
+            success: true,
+            data: {
+                clientId: "test-client",
+                authorizationUrl: brokerAuthorizationUrl(body.state)
+            }
+        });
     };
 
     await assert.rejects(
@@ -933,6 +1001,7 @@ test("web login rejects callback state mismatch without exchanging the code", as
         (error) => error.code === "STATE_MISMATCH"
     );
 
+    assert.equal(stateRequests, 1);
     assert.equal(browser.popup.closed, true);
     assert.equal(browser.values.size, 0);
 });
@@ -951,7 +1020,7 @@ test("web login reports a blocked popup", async () => {
     assert.equal(browser.values.size, 0);
 });
 
-test("web callback helper posts only code and state to the same origin and closes the popup", async () => {
+test("web callback bridge posts only state and outcome, never code or tokens", async () => {
     const { completeWebAuthCallback } = await createClient();
     let postedMessage;
     let targetOrigin;
@@ -961,7 +1030,7 @@ test("web callback helper posts only code and state to the same origin and close
     globalThis.window = {
         location: {
             origin: "https://example.com",
-            href: "https://example.com/auth/callback?code=callback-code&state=callback-state"
+            href: "https://example.com/auth-callback.html?state=123e4567-e89b-12d3-a456-426614174000&result=success&code=must-not-be-forwarded"
         },
         history: {
             replaceState(_state, _title, url) {
@@ -983,11 +1052,41 @@ test("web callback helper posts only code and state to the same origin and close
 
     assert.deepEqual(postedMessage, {
         type: "NINJA_AUTH_WEB_CALLBACK",
-        code: "callback-code",
-        state: "callback-state"
+        state: "123e4567-e89b-12d3-a456-426614174000",
+        success: true
     });
     assert.equal(targetOrigin, "https://example.com");
-    assert.equal(new URL(replacedUrl).searchParams.has("code"), false);
-    assert.equal(new URL(replacedUrl).searchParams.has("state"), false);
+    for (const key of ["code", "state", "result", "error"]) {
+        assert.equal(new URL(replacedUrl).searchParams.has(key), false);
+    }
     assert.equal(closed, true);
+});
+
+test("web callback bridge forwards a generic error without forwarding provider details", async () => {
+    const { completeWebAuthCallback } = await createClient();
+    let postedMessage;
+
+    globalThis.window = {
+        location: {
+            origin: "https://example.com",
+            href: "https://example.com/auth-callback.html?state=123e4567-e89b-12d3-a456-426614174000&result=error&error=access_denied"
+        },
+        history: {
+            replaceState() {}
+        },
+        opener: {
+            postMessage(message) {
+                postedMessage = message;
+            }
+        },
+        close() {}
+    };
+
+    completeWebAuthCallback();
+
+    assert.deepEqual(postedMessage, {
+        type: "NINJA_AUTH_WEB_CALLBACK",
+        state: "123e4567-e89b-12d3-a456-426614174000",
+        error: "access_denied"
+    });
 });

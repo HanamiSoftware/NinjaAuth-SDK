@@ -7,6 +7,8 @@ export type InternalErrorCode =
     | "AUTHORIZATION_FAILED"
     | "OAUTH_DENIED"
     | "OAUTH_PROVIDER_ERROR"
+    | "OAUTH_STATE_FAILED"
+    | "OAUTH_CLIENT_MISMATCH"
     | "INVALID_CALLBACK"
     | "STATE_MISMATCH"
     | "TRANSACTION_NOT_FOUND"
@@ -15,6 +17,7 @@ export type InternalErrorCode =
     | "NETWORK"
     | "EXCHANGE_FAILED"
     | "SESSION_FAILED"
+    | "SESSION_NOT_ESTABLISHED"
     | "LOGOUT_FAILED"
     | "INVALID_RESPONSE"
     | "UNKNOWN";

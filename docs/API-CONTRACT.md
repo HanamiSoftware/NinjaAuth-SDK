@@ -1,21 +1,18 @@
-# Ninja Connect Auth API — SDK/Worker Contract (dev)
+# Ninja Connect Auth API — SDK/Worker Contract
 
-This document records the public SDK contract visible in the dev source. The Auth Worker currently resides in [NinjaURL — Workers/auth-worker](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker). Verify its branch and commit independently before treating cross-repository behavior as current.
+This document describes the server-side Web PKCE flow and the existing Chrome Extension flow. The new broker runtime lives in [Ninja Connect — Workers/auth-broker](https://github.com/HanamiSoftware/Ninja-Connect/tree/feat/oauth-state-broker-worker-2026-11-09/Workers/auth-broker). The legacy NinjaURL Auth Worker continues to serve the existing Extension endpoints during this transition.
 
-## Public export and singleton contract
-
-The package entry point exports the `NinjaAuth` class.
+## Public SDK contract
 
 ```ts
 import { NinjaAuth } from "@ninjaconnect/auth";
 
 const auth = new NinjaAuth();
-
 auth.init({
   clientId: "YOUR_CLIENT_ID",
   redirectUri: "YOUR_REGISTERED_REDIRECT_URI",
-  platform: "extension",
-  environment: "development"
+  platform: "web",
+  environment: "production"
 });
 
 const user = await auth.login();
@@ -23,108 +20,102 @@ const session = await auth.getSession();
 await auth.logout();
 ```
 
-Contract:
+- `NinjaAuth` is a runtime-local singleton with a public constructor.
+- `init()` is an instance method and can be called once.
+- `login()` returns `Promise<NinjaUser>`.
+- `getSession()` observes the current session; it never starts interactive login.
+- `logout()` resolves only after the server confirms `data.loggedOut === true`.
+- The singleton is not shared across separate tabs, workers, or extension contexts.
 
-- The public constructor is callable.
-- Repeated construction in the same JavaScript runtime returns the same instance.
-- `init(config)` is an instance method and returns that instance.
-- Initialization is accepted once. A subsequent call throws `INITIALIZATION`.
-- `login()`, `getSession()`, and `logout()` are instance methods.
-- The singleton is not shared across separate JavaScript runtimes or extension contexts.
-- The old static API `NinjaAuth.init(config)` is not the public contract.
+## Web Authorization Code + PKCE flow
 
-The package entry point currently exports the types `NinjaAuthConfig` and `NinjaUser`. The method `getSession()` returns `NinjaSession`, but that type is not currently re-exported from `src/index.ts`; this is an API completeness item to decide and verify.
+The Web flow separates the identity broker from the application's session:
 
-## SDK methods
+1. The SDK opens a blank popup synchronously from the user's click handler.
+2. It generates PKCE S256 and a UUID `state`.
+3. The browser sends `POST https://auth.ninjaconnect.io/v1/state` with JSON:
+   - `state`
+   - `client_id`
+   - `code_verifier`
+   - `redirect_uri`
+4. Ninja Connect validates the client and exact callback against `oauth_clients_internal`, validates the calling `Origin`, and stores the short-lived transaction in the `OAUTH_TRANSACTIONS` Durable Object namespace.
+5. The popup opens the AuthGear authorization URL. The registered redirect URI is the consuming application's backend callback, for NinjaURL:
+   `https://api.ninjaurl.io/v1/auth/callback`.
+6. AuthGear redirects the authorization code and state directly to that backend callback. The code is not delivered to the parent page.
+7. The NinjaURL backend calls Ninja Connect's protected server-to-server endpoint:
+   `POST https://auth.ninjaconnect.io/v1/exchange/internal`
+   with `{ state, code }` and `Authorization: Bearer <NINJAURL_EXCHANGE_SECRET>`.
+8. Ninja Connect atomically consumes the transaction, retrieves the verifier, and exchanges the authorization code with AuthGear. It returns tokens and the stored, validated return origin only to the authenticated backend caller.
+9. NinjaURL resolves the user profile, creates its own application session, stores the session hash and encrypted refresh token, and sets its own HttpOnly cookie on `api.ninjaurl.io`.
+10. The backend redirects the popup to the Dashboard's same-origin `/auth-callback.html` bridge. The bridge posts only `state` and the success/error outcome to the opener. It never posts the authorization code, verifier, access token, refresh token, or session cookie.
+11. The SDK verifies state and calls the application API's `/v1/session` endpoint. The API origin is derived from the registered backend callback URI.
 
-| Method | Return | Behavior |
+The `redirectUri` must be the exact callback registered for the client. The parent application's origin must be allowlisted by Ninja Connect and by the consuming API's credentialed CORS policy.
+
+## Web transaction request
+
+```http
+POST /v1/state
+Content-Type: application/json
+Origin: https://dashboard.ninjaurl.io
+```
+
+```json
+{
+  "state": "UUID",
+  "client_id": "registered-client-id",
+  "code_verifier": "PKCE-verifier",
+  "redirect_uri": "https://api.ninjaurl.io/v1/auth/callback"
+}
+```
+
+The endpoint does not accept an authorization code. If client_id is omitted, the exact callback URI must resolve to exactly one active registered client. The endpoint returns the resolved clientId. The verifier is stored server-side for at most five minutes. A transaction is consumed atomically once; a replay or expired transaction is rejected.
+
+## Internal exchange contract
+
+```http
+POST /v1/exchange/internal
+Authorization: Bearer <NINJAURL_EXCHANGE_SECRET>
+Content-Type: application/json
+```
+
+```json
+{
+  "state": "UUID",
+  "code": "authorization-code"
+}
+```
+
+This endpoint is backend-only. It rejects calls without the configured shared secret. It consumes the transaction before calling AuthGear, so failed or interrupted exchanges require a new login attempt. It returns upstream tokens only to the trusted backend and uses `Cache-Control: no-store`.
+
+For an OAuth provider error, the application backend calls the protected `POST /v1/exchange/internal/cancel` endpoint with `{ state }`; Ninja Connect consumes the pending transaction and returns the previously validated return origin.
+
+## Chrome Extension flow
+
+The Chrome Extension flow remains on its existing launcher and exchange contract in this iteration. It continues to use its platform-specific transaction storage and Ninja Connect session endpoints. The new backend callback/session flow is selected only when `platform: "web"`.
+
+## Session endpoints by platform
+
+| Platform | `getSession()` | `logout()` |
 |---|---|---|
-| `new NinjaAuth()` | `NinjaAuth` | Returns the runtime singleton instance |
-| `init(config)` | `NinjaAuth` | Validates configuration and initializes the instance once |
-| `login()` | `Promise<NinjaUser>` | Starts interactive Chrome Extension or Web popup Authorization Code + PKCE, based on `platform` |
-| `getSession()` | `Promise<NinjaSession>` | Observes the current server session; does not start login |
-| `logout()` | `Promise<void>` | Revokes the current cookie session and requires server confirmation |
+| Chrome Extension | Ninja Connect `/v1/session` | Ninja Connect `/v1/logout` |
+| Web | Application API origin derived from `redirectUri`, `/v1/session` | Application API origin derived from `redirectUri`, `/v1/logout` |
 
-## Web popup callback contract
-
-For `platform: "web"`:
-
-1. `login()` opens a blank popup synchronously, before the first asynchronous PKCE operation, to preserve browser user activation.
-2. The SDK creates PKCE S256 and UUID state. The parent page keeps the verifier, redirect URI, and creation time in an in-memory transaction store in the parent page.
-3. The popup navigates to Ninja Connect authorization. The registered `redirectUri` must share the exact origin of the calling page.
-4. The application's callback page calls the exported `completeWebAuthCallback()` helper. It sends only `code`, `state`, and provider error fields to the opener, using the callback origin as `targetOrigin`, then closes.
-5. The opener accepts messages only from that popup window and the exact callback origin. The existing SDK callback parser checks provider errors and the SDK compares returned state with the initiating state before code exchange.
-6. The opener reads the PKCE verifier from its own in-memory transaction store and performs the existing credentialed `POST /v1/exchange`.
-
-The callback route must import and invoke:
-
-```ts
-import { completeWebAuthCallback } from "@ninjaconnect/auth";
-completeWebAuthCallback();
-```
-
-The popup message never contains the PKCE verifier, access/refresh tokens, or session cookie. The SDK does not read or persist the HttpOnly session cookie. Browser-level verification must still confirm that COOP does not sever `window.opener`, that the Worker permits credentialed CORS from the exact application origin, and that the browser accepts the cross-origin session cookie.
-
-## Worker routes
-
-| Method | Path | Purpose | SDK status |
-|---|---|---|---|
-| POST | /v1/exchange | Exchange authorization code and create the Ninja Connect session | Implemented |
-| GET | /v1/session | Resolve the current session; may refresh server-side | Implemented |
-| GET | /v1/user/me | Return current authenticated user | Worker route; not a separate SDK method |
-| POST | /v1/logout | Revoke the session identified by the current ninja_session cookie and clear that cookie | Implemented |
-| POST (proposed, not implemented) | /v1/logout/all | Revoke all active sessions for the authenticated user | Not available; not an SDK method |
-
-The experimental POST /v1/state route is not part of the SDK flow. NinjaAuth creates and validates the OAuth transaction client-side and sends its UUID state in the exchange request.
-
-## Exchange request
-
-The SDK sends JSON containing `state` (UUID), `code`, `client_id`, `code_verifier`, and `redirect_uri`. It uses PKCE S256, compares callback state with the original transaction before exchange, and validates the response envelope and `data.user`.
-
-## Scope and endpoints
-
-The source default scope is `openid profile email offline_access`. Per-consumer custom scope configuration is future work.
-
-| Environment | API base |
-|---|---|
-| development | http://127.0.0.1:8787/v1 |
-| production | https://auth.ninjaconnect.io/v1 |
-
-The default environment is production; the authorization origin remains https://auth.ninjaconnect.io.
-
-## Session semantics
-
-`getSession()` observes the current Ninja Connect session and never starts interactive login.
-
-- A successful 200 response with `data.authenticated === false` is a normal unauthenticated result.
-- A 401 response is mapped to unauthenticated only when `error.code === "INVALID_SESSION"`.
-- Other authorization errors, malformed responses, network failures, server errors, and temporary refresh failures remain errors.
-
-```ts
-type NinjaSession = {
-  authenticated: boolean;
-  user: NinjaUser | null;
-  session: {
-    expiresAt: string;
-    absoluteExpiresAt: string;
-  } | null;
-};
-```
+For NinjaURL, those Web endpoints are hosted on `api.ninjaurl.io`. The Dashboard's existing `/v1/user/me` endpoint continues to use the same host-only application cookie.
 
 ## Cookie and security requirements
 
-- Session and logout requests use `credentials: "include"`.
-- The session cookie is HttpOnly; SDK JavaScript must not read it.
-- Validate CORS and cookie attributes against actual Extension and production origins.
-- Do not store the raw session secret or upstream refresh token in SDK storage.
-- Refresh must not extend absolute session expiry or reactivate a revoked session.
+- NinjaURL sets `ninja_session` only from a response served by `api.ninjaurl.io`.
+- The cookie is host-only: no `Domain` attribute.
+- Cookie attributes: `HttpOnly; Secure; SameSite=Strict; Path=/`.
+- The Dashboard uses credentialed requests to `api.ninjaurl.io`; the browser must accept the cookie for same-site, cross-origin requests.
+- The shared `NINJAURL_EXCHANGE_SECRET` must be configured as a Worker secret on both the Auth Worker and the NinjaURL API Worker. Use the same high-entropy value; never put it in browser code.
+- The Auth Worker must have the `OAUTH_TRANSACTIONS` Durable Object binding and the `oauth-state-v1` migration deployed.
+- The `oauth_clients_internal` table migration must be applied before the state endpoint can validate clients.
+- The registered callback URI must exactly match the backend callback URL; no wildcard or prefix matching.
+- No authorization code, PKCE verifier, access token, refresh token, or session secret may be forwarded through popup `postMessage`.
+- A transaction is single-use. If the upstream exchange fails after consumption, the user must restart login.
 
-## Logout
+## Remaining verification
 
-`POST /v1/logout` is current-session-only. The SDK resolves `logout()` only after the HTTP response and success envelope confirm `data.loggedOut === true`.
-
-Global logout at `POST /v1/logout/all` is proposed but not implemented. AuthGear SSO sessions and Ninja Connect sessions are separate lifecycles.
-
-## Verification boundary
-
-The dev test suite has been updated to the constructor-singleton contract and contains 37 cases. It is test code, not a passing test result: execution on the current dev commit remains pending. Live Chrome/Worker cookie/CORS E2E and the Extension cache/protected-operation checks remain separate verification tasks.
+Mocks and typechecks do not prove browser behavior. Required live checks include popup opener preservation across the AuthGear round-trip, CORS preflight and exact-origin credentialed requests, cookie acceptance on the API host, callback bridge messaging, session refresh, and logout.

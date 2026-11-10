@@ -1,135 +1,97 @@
-# NinjaAuth â€” Test Plan (dev)
+# NinjaAuth — Test Plan
 
-This plan separates deterministic SDK regression tests from real Chrome/Worker integration checks. A passing mock suite does not prove cookie, CORS, browser, or provider behavior.
+This plan separates deterministic SDK and Worker tests from real-browser/provider checks. Passing mocks does not prove cookie, CORS, popup, or upstream-provider behavior.
 
-## 1. Automated SDK suite
+## 1. SDK automated tests
 
-File: `test/ninja-auth.test.mjs`  
-Runner: Node.js built-in test runner  
-Current coverage: 41 top-level cases (including Web popup callback tests).
+File: test/ninja-auth.test.mjs  
+Runner: Node.js built-in test runner.
 
-The suite imports the built SDK entry point with a fresh module identity for each case. This isolates the runtime singleton between tests while preserving the real constructor behavior within each case.
+Coverage includes:
+- public constructor/singleton and one-shot initialization;
+- Chrome Extension PKCE, state validation, exchange response validation, and cleanup;
+- Web popup opened synchronously before asynchronous work;
+- Web POST /v1/state request with client ID, exact backend callback, state, and verifier;
+- Web callback outcome accepted only from the popup and the opener's exact origin;
+- state mismatch rejected before session lookup;
+- Web success reads the application session endpoint with credentials;
+- popup blocked/closed and provider cancellation/error paths;
+- callback bridge sends only state and outcome; authorization code, verifier, tokens, and cookie are never posted;
+- session observation and logout contracts for both platform endpoint families;
+- malformed responses, network failures, and operational errors remain errors.
 
-| Area | Assertions |
-|---|---|
-| Public API | Named class export; no old static init; constructor returns same instance |
-| Initialization | init returns this; second init rejected; missing/invalid config rejected |
-| Lifecycle guards | login/getSession/logout before init rejected |
-| Platform | Web popup login, callback message, popup blocked, state mismatch |
-| Session | authenticated and anonymous payloads; only 401 INVALID_SESSION becomes anonymous |
-| Session failures | USER_NOT_FOUND, refresh unavailable, network, malformed JSON and invalid payload remain errors |
-| Logout | credentialed current-session request; requires data.loggedOut === true; network and malformed confirmation rejected |
-| OAuth | Authorization Code + PKCE S256; state and verifier format; callback state validation; access_denied |
-| Exchange | correct request body, endpoint and credentials; exchange errors and network failures |
-| Cleanup | transaction removed; primary failure preserved; cleanup failure after successful exchange is reported |
-| Lifecycle | mocked login â†’ getSession â†’ logout sequence |
+Required commands on the exact branch commit:
 
-### Required local execution
-
-Run on the exact SDK dev commit:
-
-```bash
-npm run typecheck
-npm run build
-npm test
-```
+    npm run typecheck
+    npm run build
+    npm test
 
 Record the commit SHA and complete output. Do not mark the suite green until all three commands finish successfully.
 
-### Verified CI evidence â€” 4 November 2026
+## 2. Auth Worker transaction-store tests
 
-- Repository: `HanamiSoftware/NinjaAuth-SDK`
-- Branch: `dev`
-- Commit: `a8e79dceea72cbc8c2b0c69f897ec42c9e0ce9d4`
-- Workflow: `SDK CI`, run [#25](https://github.com/HanamiSoftware/NinjaAuth-SDK/actions/runs/41863128345)
-- Event: `push` (the commit itself adds `workflow_dispatch` for future manual runs)
-- Result: completed / success
-- Steps: `npm ci`, `npm run typecheck`, `npm run build`, `npm test` â€” all successful
-- Test summary: 37 passed, 0 failed, 0 skipped
+File: Workers/auth-worker/test/oauth-transaction-store.test.ts
 
-This verifies the SDK checks on `dev`. It does not replace the Chrome/Worker integration matrix below and does not prove cookie, CORS, provider, or live browser behavior.
+The Cloudflare Worker test environment must verify:
+- a valid PKCE transaction can be stored;
+- two concurrent consume requests produce exactly one success and one 410;
+- already-expired transactions are rejected;
+- the oauth-state-v1 Durable Object migration is present in the test configuration.
 
-## 2. Chrome Extension integration matrix
+The integration contract still needs tests for POST /v1/state registry validation, the internal-secret gate, AuthGear token exchange, and the cancel path.
 
-Run with the Extension dev branch and the intended local or production Auth Worker environment.
+## 3. Web browser integration matrix
 
-| ID | Scenario | Expected result |
-|---|---|---|
-| CH-01 | Fresh install, no cached user, no server session | Restore resolves anonymous; no user is written to local storage |
-| CH-02 | Fresh install, no cached user, valid server session | SDK getSession resolves authenticated; user is cached |
-| CH-03 | Cached user exists at startup | UI restores immediately; result has session null; no session request is made in the cache-hit path |
-| CH-04 | Cached user removed, valid server cookie remains | Restore calls getSession and repopulates local user |
-| CH-05 | Cached user exists, server is temporarily unavailable | Cache is not silently deleted; error remains observable; protected action must not proceed |
-| CH-06 | No cache and server returns INVALID_SESSION | Restore resolves anonymous |
-| CH-07 | No cache and server returns temporary/operational error | Error is not converted into anonymous state |
-| CH-08 | Login succeeds | OAuth completes; SDK session is authenticated; local user is saved; UI receives USER_UPDATED |
-| CH-09 | User cancels authorization | Login cancellation is reported; no authenticated cache is written |
-| CH-10 | Logout succeeds | Server confirms current-session logout; local user is removed; UI receives anonymous USER_UPDATED |
-| CH-11 | Logout fails on server/network | Local cache is not cleared as if logout had succeeded |
-| CH-12 | Login after successful logout | A new interactive login can create a new session |
-| CH-13 | Service Worker restarts | A new runtime instance initializes correctly and resolves session from cache/server |
-| CH-14 | Protected operation with cache-only result | Operation first obtains a live session; session null is never treated as authorization |
-
-## 3. Web popup integration matrix
-
-Run from a real HTTPS application origin using a registered Web redirect URI on the same origin.
+Run from the real Dashboard HTTPS origin using the exact callback registered for the Web client.
 
 | ID | Scenario | Expected result |
 |---|---|---|
-| WEB-01 | Login initiated from a user click | Blank popup opens synchronously before asynchronous PKCE generation |
-| WEB-02 | Successful provider login | Callback helper posts code/state to the opener; popup closes; main page exchanges code |
-| WEB-03 | User closes popup | Login rejects with authorization-cancelled; transaction is cleaned up |
-| WEB-04 | Provider returns access_denied | Login rejects with OAuth denial; no exchange occurs |
-| WEB-05 | Callback state mismatch | Exchange is not called; transaction is cleaned up |
-| WEB-06 | Callback message from wrong origin or window | Message is ignored |
-| WEB-07 | Popup blocked | Login rejects clearly; no transaction or exchange is created |
-| WEB-08 | Callback page history | One-time code/state/error query values are removed before the callback page continues |
-| WEB-09 | Provider redirect with COOP | Opener remains available through the provider round-trip |
-| WEB-10 | Exchange from application origin | Worker accepts credentialed CORS and browser retains the HttpOnly session cookie |
+| WEB-01 | Login initiated from a user click | Blank popup opens synchronously before PKCE/state network work |
+| WEB-02 | State registration | Browser posts verifier only to Ninja Connect /v1/state; response is no-store |
+| WEB-03 | Client/callback mismatch | Ninja Connect rejects the transaction before opening provider authorization |
+| WEB-04 | Successful provider login | AuthGear redirects code/state directly to api.ninjaurl.io; parent never receives code |
+| WEB-05 | Server exchange | NinjaURL backend calls the protected Ninja Connect endpoint; verifier is retrieved server-side |
+| WEB-06 | Session creation | NinjaURL persists its session and sets host-only HttpOnly cookie on api.ninjaurl.io |
+| WEB-07 | Popup bridge | API callback redirects to Dashboard bridge; bridge posts only state/outcome to opener |
+| WEB-08 | State mismatch | SDK rejects the callback and does not read an authenticated session |
+| WEB-09 | Provider cancellation | Transaction is consumed through the cancel endpoint and the bridge reports a generic error |
+| WEB-10 | Popup blocked/closed | SDK rejects clearly and closes/cleans up its popup |
+| WEB-11 | Opener preservation | window.opener survives the AuthGear → API callback → Dashboard bridge round-trip |
+| WEB-12 | Credentialed session lookup | SDK calls https://api.ninjaurl.io/v1/session; browser sends the NinjaURL cookie |
+| WEB-13 | Logout | SDK calls the NinjaURL API /v1/logout; cookie is cleared and session revoked |
+| WEB-14 | Replay | A second internal exchange for the same state is rejected |
 
-The SDK mock suite does not prove WEB-09 or WEB-10. Record browser/version, app origin, Worker environment, and sanitized network evidence.
+WEB-11 through WEB-14 require real browser/Worker testing. SDK mocks do not prove them.
 
 ## 4. Cookie and CORS checks
 
-These require a real browser and Worker; mocks are insufficient.
+- [ ] Cookie is set only by a response from api.ninjaurl.io.
+- [ ] Cookie has no Domain attribute; it is host-only.
+- [ ] Cookie attributes are HttpOnly; Secure; SameSite=Strict; Path=/.
+- [ ] Dashboard requests to api.ninjaurl.io use credentials: include.
+- [ ] API CORS allows the exact Dashboard origin and credentials.
+- [ ] Auth Worker CORS allows the exact Dashboard origin for POST /v1/state.
+- [ ] Browser accepts the cookie on the top-level backend callback response and sends it on subsequent same-site cross-origin API requests.
+- [ ] SDK JavaScript cannot read the cookie.
+- [ ] No code, verifier, access token, refresh token, or raw session secret appears in URLs, logs, local/session storage, or popup messages.
 
-- [ ] Session cookie is HttpOnly and has the intended Secure/SameSite/Path/Domain attributes.
-- [ ] JavaScript cannot read the session cookie.
-- [ ] Exchange, session, and logout requests send credentials.
-- [ ] Worker CORS allows the exact Chrome Extension origin and credentialed requests.
-- [ ] Browser accepts and retains the cookie after exchange.
-- [ ] Session lookup observes the cookie after page/Service Worker restart.
-- [ ] Logout clears/revokes the current session and the browser drops the cookie.
-- [ ] No raw session secret, access token, refresh token, or PKCE verifier is persisted in `chrome.storage.local`.
+## 5. Operational prerequisites
 
-## 5. Failure and security review
-
-- [ ] State mismatch prevents code exchange.
-- [ ] OAuth denial does not create an authenticated session.
-- [ ] Invalid/malformed exchange response is rejected.
-- [ ] Temporary session refresh failure remains an error.
-- [ ] Cache restoration is treated as UI state only.
-- [ ] Every protected operation requires a live server-side session check.
-- [ ] A stale cache is not sufficient to authorize a protected operation.
-- [ ] Logout failure does not falsely report local logout completion.
+- [ ] Apply the internal OAuth client registry migration from Ninja Platform Data PR #17 before testing /v1/state.
+- [ ] Register the exact callback https://api.ninjaurl.io/v1/auth/callback for the NinjaURL Web client in the internal registry and upstream OAuth provider.
+- [ ] Deploy the Auth Worker OAUTH_TRANSACTIONS Durable Object binding and oauth-state-v1 migration.
+- [ ] Configure the same high-entropy NINJAURL_EXCHANGE_SECRET as a Worker secret on both Auth Worker and NinjaURL create-worker.
+- [ ] Verify the API Worker route api.ninjaurl.io/v1/* serves /v1/auth/callback, /v1/session, and /v1/logout.
+- [ ] Verify Dashboard hosts /auth-callback.html at the same origin as the opener.
+- [ ] Confirm effective COOP/COEP response headers do not sever the popup opener.
 
 ## 6. Evidence record
 
-For each execution, record:
+For every run, record:
+- repository, branch, and exact commit SHA for SDK, Worker, and Dashboard;
+- browser/version and test profile;
+- environment and exact origin;
+- test ID/command, expected result, and actual result;
+- sanitized console/network evidence.
 
-- Repository and branch.
-- Exact commit SHA for SDK, Extension, and Worker.
-- Browser version and test profile.
-- Environment and origin.
-- Test ID or command.
-- Expected and actual result.
-- Relevant sanitized console/network evidence.
-
-Never include cookie values, authorization codes, PKCE verifiers, access/refresh tokens, or other secrets in the evidence.
-
-
-## Execution evidence — 4 November 2026
-
-- GitHub Actions [run #25](https://github.com/HanamiSoftware/NinjaAuth-SDK/actions/runs/41863128345) passed `npm run typecheck`, `npm run build`, and all 37 tests on `dev` commit `a8e79dceea72cbc8c2b0c69f897ec42c9e0ce9d4`.
-- This result is specific to that exact `dev` commit. The inspected `master` head is `96ff24ed380713ac08d9d78176f0636f69444b92`; no CI result was verified for that head in the 4 November audit.
-- The plan remains open for real Chrome/Worker cookie, CORS, Service Worker restart, and protected-operation checks. The automated mock suite does not replace those tests.
+Never include cookie values, authorization codes, PKCE verifiers, access/refresh tokens, or shared secrets in test evidence.

@@ -20,7 +20,6 @@ import { generatePKCE } from "./utils/pkce";
 import type { AuthorizationLauncher } from "./oauth/authorization";
 import { ChromeOAuthTransactionStorage } from "./platform/chrome/TransactionStorage";
 import { ChromeAuthorizationLauncher } from "./platform/chrome/AuthorizationLauncher";
-import { WebOAuthTransactionStorage } from "./platform/web/TransactionStorage";
 import { WebAuthorizationLauncher } from "./platform/web/AuthorizationLauncher";
 import { NinjaAuthErrorException } from "./errors/ErrorHandler";
 import {
@@ -110,7 +109,7 @@ export class NinjaAuth {
 	/**
 	 * initialize the NinjaAuth instance with the provided configuration.
 	 * @param config - The configuration object for initializing the NinjaAuth instance.
-	 * @param config.clientId - The client ID for the application.
+	 * @param config.clientId - The client ID for the application; optional for Web when callback lookup is unambiguous.
 	 * @param config.redirectUri - The redirect URI for the application.
 	 * @param config.platform - The platform type, either "extension" or "web". Defaults to "extension".
 	 * @param config.environment - The environment type, either "development" or "production". Defaults to "production".
@@ -138,10 +137,10 @@ export class NinjaAuth {
         );
     }
 
-    if (!config.clientId) {
+    if (!config.clientId && supportedPlatforms !== "web") {
         throw NinjaAuthErrorException(
             "CONFIGURATION",
-            "NinjaAuth: clientId is required."
+            "NinjaAuth: clientId is required for the Extension platform."
         );
     }
 
@@ -199,22 +198,54 @@ export class NinjaAuth {
         if (this.config!.platform === "web") {
             const authorize = new WebAuthorizationLauncher();
 
-            // Must happen before the first await: browsers may block window.open
-            // once the original click's transient user activation has expired.
+            // Must happen before the first await to preserve browser user activation.
             const prepared = authorize.prepareAuthorization();
 
             try {
-                const { verifier, challenge } = await generatePKCE();
+                const { verifier } = await generatePKCE();
                 const state = generateState();
 
-                return await this.createAuthFlow(
-                    new WebOAuthTransactionStorage(),
-                    authorize,
-                    verifier,
-                    challenge,
-                    state,
+                const authorizationUrl = await this.registerWebTransaction(state, verifier);
+
+                const responseUrl = await authorize.launchAuthorization(
+                    authorizationUrl,
                     prepared
                 );
+                const callbackUrl = new URL(responseUrl);
+
+                if (callbackUrl.searchParams.get("state") !== state) {
+                    throw NinjaAuthErrorException(
+                        "STATE_MISMATCH",
+                        "La verifica di sicurezza dell'autorizzazione non Ã¨ riuscita."
+                    );
+                }
+
+                const callbackError = callbackUrl.searchParams.get("error");
+                if (callbackError) {
+                    throw NinjaAuthErrorException(
+                        callbackError === "access_denied" ? "OAUTH_DENIED" : "OAUTH_PROVIDER_ERROR",
+                        callbackError === "access_denied"
+                            ? "L'autorizzazione Ã¨ stata negata."
+                            : "Il provider di autenticazione ha restituito un errore."
+                    );
+                }
+
+                if (callbackUrl.searchParams.get("success") !== "true") {
+                    throw NinjaAuthErrorException(
+                        "INVALID_CALLBACK",
+                        "Il callback backend non ha confermato il completamento dell'autenticazione."
+                    );
+                }
+
+                const session = await this.getSession();
+                if (!session.authenticated || !session.user) {
+                    throw NinjaAuthErrorException(
+                        "SESSION_NOT_ESTABLISHED",
+                        "Il backend non ha confermato una sessione NinjaURL attiva."
+                    );
+                }
+
+                return session.user;
             } catch (error) {
                 authorize.cancelAuthorization(prepared);
                 throw error;
@@ -231,6 +262,115 @@ export class NinjaAuth {
             challenge,
             state
         );
+    }
+
+
+    private getApplicationEndpoint(path: "session" | "logout"): string {
+        if (!this.config?.redirectUri) {
+            throw NinjaAuthErrorException(
+                "CONFIGURATION",
+                "NinjaAuth: redirectUri is required for the Web application session."
+            );
+        }
+
+        let callbackUrl: URL;
+        try {
+            callbackUrl = new URL(this.config.redirectUri);
+        } catch (error) {
+            throw NinjaAuthErrorException(
+                "CONFIGURATION",
+                "NinjaAuth: redirectUri is invalid.",
+                error
+            );
+        }
+
+        return `${callbackUrl.origin}/v1/${path}`;
+    }
+
+    private async registerWebTransaction(state: string, verifier: string): Promise<string> {
+        let response: Response;
+        try {
+            response = await fetch(
+                getNinjaConnectEndpoints(this.config!.environment ?? "production").state,
+                {
+                    method: "POST",
+                    credentials: "omit",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        state,
+                        ...(this.config!.clientId ? { client_id: this.config!.clientId } : {}),
+                        code_verifier: verifier,
+                        redirect_uri: this.config!.redirectUri,
+                        scope: this.config!.scopes!.join(" ")
+                    })
+                }
+            );
+        } catch (error) {
+            throw NinjaAuthErrorException(
+                "NETWORK",
+                "Impossibile registrare la transazione OAuth con Ninja Connect.",
+                error
+            );
+        }
+
+        let result: unknown;
+        try {
+            result = await response.json();
+        } catch (error) {
+            throw NinjaAuthErrorException(
+                "INVALID_RESPONSE",
+                "Ninja Connect ha restituito una risposta non valida per la transazione OAuth.",
+                error
+            );
+        }
+
+        if (
+            !isRecord(result) ||
+            !response.ok ||
+            result.success !== true ||
+            !isRecord(result.data) ||
+            typeof result.data.clientId !== "string" ||
+            result.data.clientId.length === 0 ||
+            typeof result.data.authorizationUrl !== "string"
+        ) {
+            throw NinjaAuthErrorException(
+                "OAUTH_STATE_FAILED",
+                "Ninja Connect non ha potuto registrare la transazione OAuth.",
+                result
+            );
+        }
+
+        if (this.config!.clientId && result.data.clientId !== this.config!.clientId) {
+            throw NinjaAuthErrorException(
+                "OAUTH_CLIENT_MISMATCH",
+                "Ninja Connect ha risolto un client ID diverso da quello configurato."
+            );
+        }
+
+        let authorizationUrl: URL;
+        try {
+            authorizationUrl = new URL(result.data.authorizationUrl);
+        } catch (error) {
+            throw NinjaAuthErrorException(
+                "INVALID_RESPONSE",
+                "Ninja Connect ha restituito un URL di autorizzazione non valido.",
+                error
+            );
+        }
+
+        if (
+            authorizationUrl.origin !== NINJA_CONNECT.AUTHORIZATION_ENDPOINT ||
+            authorizationUrl.pathname !== "/oauth2/authorize" ||
+            authorizationUrl.searchParams.get("redirect_uri") !== "https://auth.ninjaconnect.io/v1/callback" ||
+            authorizationUrl.searchParams.get("state") !== state
+        ) {
+            throw NinjaAuthErrorException(
+                "INVALID_RESPONSE",
+                "Ninja Connect ha restituito un URL di autorizzazione non attendibile."
+            );
+        }
+
+        return authorizationUrl.toString();
     }
 
 
@@ -252,7 +392,7 @@ export class NinjaAuth {
     ): Promise<NinjaUser> {
 
         const authorizationUrl = buildAuthorizationUrl({
-            clientId: this.config!.clientId,
+            clientId: this.config!.clientId!,
             redirectUri: this.config!.redirectUri,
             codeChallenge: challenge,
             state,
@@ -286,7 +426,7 @@ export class NinjaAuth {
             if (callback.state !== state) {
                 throw NinjaAuthErrorException(
                     "STATE_MISMATCH",
-                    "La verifica di sicurezza dell'autorizzazione non ÃƒÂ¨ riuscita."
+                    "La verifica di sicurezza dell'autorizzazione non ÃƒÆ’Ã‚Â¨ riuscita."
                 );
             }
 
@@ -296,7 +436,7 @@ export class NinjaAuth {
             if (!returnedTransaction) {
                 throw NinjaAuthErrorException(
                     "TRANSACTION_NOT_FOUND",
-                    "La transazione di autorizzazione non ÃƒÂ¨ piÃƒÂ¹ disponibile."
+                    "La transazione di autorizzazione non ÃƒÆ’Ã‚Â¨ piÃƒÆ’Ã‚Â¹ disponibile."
                 );
             }
 
@@ -323,7 +463,7 @@ export class NinjaAuth {
                 if (!hasPrimaryError) {
                     throw NinjaAuthErrorException(
                         "TRANSACTION_CLEANUP_FAILED",
-                        "Non ÃƒÂ¨ stato possibile eliminare la transazione OAuth.",
+                        "Non ÃƒÆ’Ã‚Â¨ stato possibile eliminare la transazione OAuth.",
                         cleanupError
                     );
                 }
@@ -395,7 +535,7 @@ export class NinjaAuth {
 
             throw NinjaAuthErrorException(
                 "INVALID_RESPONSE",
-                "Il formato della risposta del servizio di autenticazione non ÃƒÂ¨ valido.",
+                "Il formato della risposta del servizio di autenticazione non ÃƒÆ’Ã‚Â¨ valido.",
                 result
             );
         }
@@ -405,7 +545,7 @@ export class NinjaAuth {
 
             throw NinjaAuthErrorException(
                 "EXCHANGE_FAILED",
-                "Non ÃƒÂ¨ stato possibile completare l'autenticazione. Riprova.",
+                "Non ÃƒÆ’Ã‚Â¨ stato possibile completare l'autenticazione. Riprova.",
                 result
             );
         }
@@ -444,9 +584,11 @@ export class NinjaAuth {
 
         try {
             response = await fetch(
-                getNinjaConnectEndpoints(
-                    this.config!.environment ?? "production"
-                ).logout,
+                this.config!.platform === "web"
+                    ? this.getApplicationEndpoint("logout")
+                    : getNinjaConnectEndpoints(
+                        this.config!.environment ?? "production"
+                    ).logout,
                 {
                     method: "POST",
                     credentials: "include"
@@ -520,9 +662,11 @@ export class NinjaAuth {
 
     try {
         response = await fetch(
-            getNinjaConnectEndpoints(
-                this.config!.environment ?? "production"
-            ).session,
+            this.config!.platform === "web"
+                ? this.getApplicationEndpoint("session")
+                : getNinjaConnectEndpoints(
+                    this.config!.environment ?? "production"
+                ).session,
             {
                 method: "GET",
                 credentials: "include"
