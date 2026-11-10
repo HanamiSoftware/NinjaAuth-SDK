@@ -20,6 +20,8 @@ import { generatePKCE } from "./utils/pkce";
 import type { AuthorizationLauncher } from "./oauth/authorization";
 import { ChromeOAuthTransactionStorage } from "./platform/chrome/TransactionStorage";
 import { ChromeAuthorizationLauncher } from "./platform/chrome/AuthorizationLauncher";
+import { WebOAuthTransactionStorage } from "./platform/web/TransactionStorage";
+import { WebAuthorizationLauncher } from "./platform/web/AuthorizationLauncher";
 import { NinjaAuthErrorException } from "./errors/ErrorHandler";
 import {
     NINJA_CONNECT,
@@ -194,23 +196,40 @@ export class NinjaAuth {
                 "NinjaAuth: call init() before login()."
             );
         }
+        if (this.config!.platform === "web") {
+            const authorize = new WebAuthorizationLauncher();
+
+            // Must happen before the first await: browsers may block window.open
+            // once the original click's transient user activation has expired.
+            const prepared = authorize.prepareAuthorization();
+
+            try {
+                const { verifier, challenge } = await generatePKCE();
+                const state = generateState();
+
+                return await this.createAuthFlow(
+                    new WebOAuthTransactionStorage(),
+                    authorize,
+                    verifier,
+                    challenge,
+                    state,
+                    prepared
+                );
+            } catch (error) {
+                authorize.cancelAuthorization(prepared);
+                throw error;
+            }
+        }
+
         const { verifier, challenge } = await generatePKCE();
         const state = generateState();
-        switch (this.config!.platform) {
-            case "extension":
-                return this.createAuthFlow(new ChromeOAuthTransactionStorage, new ChromeAuthorizationLauncher, verifier, challenge, state);
 
-            case "web":
-                throw NinjaAuthErrorException(
-                    "UNSUPPORTED_PLATFORM",
-                    "NinjaAuth: the web authentication flow is not implemented yet."
-                );
-        }
-        return Promise.reject(
-            NinjaAuthErrorException(
-                "UNSUPPORTED_PLATFORM",
-                "NinjaAuth: the web authentication flow is not implemented yet."
-            )
+        return this.createAuthFlow(
+            new ChromeOAuthTransactionStorage(),
+            new ChromeAuthorizationLauncher(),
+            verifier,
+            challenge,
+            state
         );
     }
 
@@ -228,7 +247,8 @@ export class NinjaAuth {
         authorize: AuthorizationLauncher,
         verifier: string,
         challenge: string,
-        state: string
+        state: string,
+        preparedAuthorization?: unknown
     ): Promise<NinjaUser> {
 
         const authorizationUrl = buildAuthorizationUrl({
@@ -254,7 +274,8 @@ export class NinjaAuth {
 
             const responseUrl =
                 await authorize.launchAuthorization(
-                    authorizationUrl.toString()
+                    authorizationUrl.toString(),
+                    preparedAuthorization
                 );
 
             const callback =
@@ -500,7 +521,7 @@ export class NinjaAuth {
     try {
         response = await fetch(
             getNinjaConnectEndpoints(
-                this.config!.environment ?? "development"
+                this.config!.environment ?? "production"
             ).session,
             {
                 method: "GET",

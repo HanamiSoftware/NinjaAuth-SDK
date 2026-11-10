@@ -6,7 +6,7 @@ This plan separates deterministic SDK regression tests from real Chrome/Worker i
 
 File: `test/ninja-auth.test.mjs`  
 Runner: Node.js built-in test runner  
-Current coverage: 37 top-level cases.
+Current coverage: 41 top-level cases (including Web popup callback tests).
 
 The suite imports the built SDK entry point with a fresh module identity for each case. This isolates the runtime singleton between tests while preserving the real constructor behavior within each case.
 
@@ -15,7 +15,7 @@ The suite imports the built SDK entry point with a fresh module identity for eac
 | Public API | Named class export; no old static init; constructor returns same instance |
 | Initialization | init returns this; second init rejected; missing/invalid config rejected |
 | Lifecycle guards | login/getSession/logout before init rejected |
-| Platform | web login explicitly unsupported |
+| Platform | Web popup login, callback message, popup blocked, state mismatch |
 | Session | authenticated and anonymous payloads; only 401 INVALID_SESSION becomes anonymous |
 | Session failures | USER_NOT_FOUND, refresh unavailable, network, malformed JSON and invalid payload remain errors |
 | Logout | credentialed current-session request; requires data.loggedOut === true; network and malformed confirmation rejected |
@@ -70,7 +70,26 @@ Run with the Extension dev branch and the intended local or production Auth Work
 | CH-13 | Service Worker restarts | A new runtime instance initializes correctly and resolves session from cache/server |
 | CH-14 | Protected operation with cache-only result | Operation first obtains a live session; session null is never treated as authorization |
 
-## 3. Cookie and CORS checks
+## 3. Web popup integration matrix
+
+Run from a real HTTPS application origin using a registered Web redirect URI on the same origin.
+
+| ID | Scenario | Expected result |
+|---|---|---|
+| WEB-01 | Login initiated from a user click | Blank popup opens synchronously before asynchronous PKCE generation |
+| WEB-02 | Successful provider login | Callback helper posts code/state to the opener; popup closes; main page exchanges code |
+| WEB-03 | User closes popup | Login rejects with authorization-cancelled; transaction is cleaned up |
+| WEB-04 | Provider returns access_denied | Login rejects with OAuth denial; no exchange occurs |
+| WEB-05 | Callback state mismatch | Exchange is not called; transaction is cleaned up |
+| WEB-06 | Callback message from wrong origin or window | Message is ignored |
+| WEB-07 | Popup blocked | Login rejects clearly; no transaction or exchange is created |
+| WEB-08 | Callback page history | One-time code/state/error query values are removed before the callback page continues |
+| WEB-09 | Provider redirect with COOP | Opener remains available through the provider round-trip |
+| WEB-10 | Exchange from application origin | Worker accepts credentialed CORS and browser retains the HttpOnly session cookie |
+
+The SDK mock suite does not prove WEB-09 or WEB-10. Record browser/version, app origin, Worker environment, and sanitized network evidence.
+
+## 4. Cookie and CORS checks
 
 These require a real browser and Worker; mocks are insufficient.
 
@@ -83,7 +102,7 @@ These require a real browser and Worker; mocks are insufficient.
 - [ ] Logout clears/revokes the current session and the browser drops the cookie.
 - [ ] No raw session secret, access token, refresh token, or PKCE verifier is persisted in `chrome.storage.local`.
 
-## 4. Failure and security review
+## 5. Failure and security review
 
 - [ ] State mismatch prevents code exchange.
 - [ ] OAuth denial does not create an authenticated session.
@@ -94,7 +113,7 @@ These require a real browser and Worker; mocks are insufficient.
 - [ ] A stale cache is not sufficient to authorize a protected operation.
 - [ ] Logout failure does not falsely report local logout completion.
 
-## 5. Evidence record
+## 6. Evidence record
 
 For each execution, record:
 
