@@ -2,7 +2,7 @@
 
 NinjaAuth is the TypeScript client SDK for integrating applications with **Ninja Connect**, the shared identity and session service.
 
-> **Development status:** NinjaAuth Core 0.1 is not yet release-ready. Chrome Extension and Web popup Authorization Code + PKCE flows are implemented in the current development branch, with automated SDK tests. Real browser/provider/Worker verification, especially credentialed cookie behavior across the Dashboard and Ninja Connect origins, remains open. See the [roadmap](docs/ROADMAP.md) for evidence and next steps.
+> **Development status:** NinjaAuth Core 0.1 is not yet release-ready. Chrome Extension and Web popup Authorization Code + PKCE flows are implemented in the current development branch, with automated SDK tests. See the [roadmap](docs/ROADMAP.md) for evidence and next steps.
 
 ## Public API
 
@@ -16,7 +16,7 @@ const auth = new NinjaAuth();
 auth.init({
   clientId: "YOUR_CLIENT_ID",
   redirectUri: "YOUR_REGISTERED_REDIRECT_URI",
-  platform: "extension",
+  platform: "extension", //or "web"; default: web
   environment: "development", // or "production"; default: production
 });
 
@@ -56,7 +56,7 @@ const auth = new NinjaAuth();
 
 auth.init({
   clientId: "YOUR_WEB_CLIENT_ID",
-  redirectUri: "https://api.ninjaurl.io/v1/auth/callback",
+  redirectUri: "https://<redirect_uri>/callback",
   platform: "web",
   environment: "production"
 });
@@ -70,11 +70,11 @@ loginButton.addEventListener("click", async () => {
 });
 ```
 
-`redirectUri` is the exact backend callback registered for this client. For Web, `clientId` may be omitted when that exact callback resolves to exactly one active internal client registration. Before opening the provider, the SDK sends `state`, `code_verifier`, and `redirect_uri` (plus `client_id` when explicitly configured) to Ninja Connect's `/v1/state` endpoint. Ninja Connect validates the exact client/callback registration and stores the short-lived PKCE transaction server-side. The authorization code returns directly to the backend callback; it is never exposed to the opener page.
+`redirectUri` is the exact backend callback registered for this client. Before opening the provider, the SDK sends `state`, `code_verifier`, and `redirect_uri`, `client_id` to Ninja Connect's `/v1/state` endpoint. Ninja Connect validates the exact client/callback registration and stores the short-lived PKCE transaction server-side. The authorization code returns directly to the backend callback; it is never exposed to the opener page.
 
-The NinjaURL callback backend calls Ninja Connect's protected internal exchange endpoint server-to-server. Ninja Connect atomically consumes the transaction, retrieves the verifier, and exchanges the code with AuthGear. NinjaURL then resolves the profile, creates its own application session, and sets an HttpOnly, Secure, host-only cookie on `api.ninjaurl.io`. It redirects the popup to a minimal bridge page on the Dashboard origin. The bridge sends only `state` and the success/error outcome through `postMessage`; it never forwards the code, verifier, access token, refresh token, or session cookie.
+The NinjaURL callback backend calls Ninja Connect's protected internal exchange endpoint server-to-server. Ninja Connect atomically consumes the transaction, retrieves the verifier, and exchanges the code with AuthGear. The caller APP then resolves the profile, creates its own application session, and sets an HttpOnly, Secure, host-only cookie on caller verified domain. It redirects the popup to a minimal bridge page on the caller origin. The bridge sends only `state` and the success/error outcome through `postMessage`; it never forwards the code, verifier, access token, refresh token, or session cookie.
 
-After the bridge response, NinjaAuth verifies the state and reads the NinjaURL session through the API origin derived from `redirectUri`. `getSession()` and `logout()` therefore operate on the application's own session endpoints for the Web platform; the Chrome Extension platform retains the Ninja Connect endpoints.
+After the bridge response, NinjaAuth verifies the state and reads the caller APP session through the API origin derived from `redirectUri`. `getSession()` and `logout()` therefore operate on the application's own session endpoints for the Web platform; the Chrome Extension platform retains the Ninja Connect endpoints.
 
 A same-origin bridge page can use the exported helper:
 
@@ -85,10 +85,6 @@ completeWebAuthCallback();
 ```
 
 Keep the bridge page minimal, set a `no-referrer` policy, and do not load analytics or third-party scripts. The backend must validate the return origin against an allowlist. Real browser verification is still required for popup opener preservation, credentialed CORS, cookie acceptance, and the exact production callback registration.
-
-## Public types
-
-The current package entry point exports `NinjaAuthConfig` and `NinjaUser`. The `getSession()` return shape is `NinjaSession`; exporting that type from the package entry point remains an API completeness item to review.
 
 ## Documentation
 
@@ -102,7 +98,7 @@ The current package entry point exports `NinjaAuthConfig` and `NinjaUser`. The `
 
 ## Related component
 
-The Ninja Connect Auth Worker currently resides in [NinjaURL â€” Workers/auth-worker](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker). Its transfer to a dedicated repository is not complete.
+The Ninja Connect Auth Worker currently resides in [NinjaURL Workers/auth-worker](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker). Its transfer to a dedicated repository is not complete.
 
 ## License
 

@@ -125,22 +125,22 @@ export class NinjaAuth {
         );
     }
 
-    const supportedPlatforms = config.platform ?? "extension";
+    const supportedPlatforms = config.platform ?? "web";
 
-    if (
-        supportedPlatforms !== "extension" &&
-        supportedPlatforms !== "web"
-    ) {
+    // if (
+    //     supportedPlatforms !== "extension" &&
+    //     supportedPlatforms !== "web"
+    // ) {
+    //     throw NinjaAuthErrorException(
+    //         "CONFIGURATION",
+    //         "NinjaAuth: platform must be 'extension' or 'web'."
+    //     );
+    // }
+
+    if (!config.clientId) {
         throw NinjaAuthErrorException(
             "CONFIGURATION",
-            "NinjaAuth: platform must be 'extension' or 'web'."
-        );
-    }
-
-    if (!config.clientId && supportedPlatforms !== "web") {
-        throw NinjaAuthErrorException(
-            "CONFIGURATION",
-            "NinjaAuth: clientId is required for the Extension platform."
+            "NinjaAuth: clientId is required"
         );
     }
 
@@ -151,7 +151,7 @@ export class NinjaAuth {
         );
     }
 
-    const environment = config.environment ?? "development";
+    const environment = config.environment ?? "production";
 
     if (
         environment !== "development" &&
@@ -159,16 +159,12 @@ export class NinjaAuth {
     ) {
         throw NinjaAuthErrorException(
             "CONFIGURATION",
-            "NinjaAuth: environment must be 'development' or 'production'."
+            "NinjaAuth: environment is production by default. Specify 'development' for testing."
         );
     }
 			const defaultScopes = NINJA_CONNECT.DEFAULT_SCOPE ? NINJA_CONNECT.DEFAULT_SCOPE.split(" ") : [];
 			const userScopes = config.scopes ? config.scopes?.split(" ") : [];
 			const mergedScopes = [...new Set([...defaultScopes, ...userScopes])].join(" ");
-
-			const defaultScopes = NINJA_CONNECT.DEFAULT_SCOPE.split(" ");
-			const scopes = config.scopes ?? defaultScopes;
-			const mergedScopes = Array.from(new Set([...defaultScopes, ...scopes]));
 
     this.config = {
         clientId: config.clientId,
@@ -216,7 +212,7 @@ export class NinjaAuth {
                 if (callbackUrl.searchParams.get("state") !== state) {
                     throw NinjaAuthErrorException(
                         "STATE_MISMATCH",
-                        "La verifica di sicurezza dell'autorizzazione non Ã¨ riuscita."
+                        "La verifica di sicurezza dell'autorizzazione non ÃƒÂ¨ riuscita."
                     );
                 }
 
@@ -225,7 +221,7 @@ export class NinjaAuth {
                     throw NinjaAuthErrorException(
                         callbackError === "access_denied" ? "OAUTH_DENIED" : "OAUTH_PROVIDER_ERROR",
                         callbackError === "access_denied"
-                            ? "L'autorizzazione Ã¨ stata negata."
+                            ? "L'autorizzazione ÃƒÂ¨ stata negata."
                             : "Il provider di autenticazione ha restituito un errore."
                     );
                 }
@@ -298,10 +294,10 @@ export class NinjaAuth {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         state,
-                        ...(this.config!.clientId ? { client_id: this.config!.clientId } : {}),
+                        client_id: this.config!.clientId,
                         code_verifier: verifier,
                         redirect_uri: this.config!.redirectUri,
-                        scope: this.config!.scopes!.join(" ")
+                        scope: this.config!.scopes!
                     })
                 }
             );
@@ -426,7 +422,7 @@ export class NinjaAuth {
             if (callback.state !== state) {
                 throw NinjaAuthErrorException(
                     "STATE_MISMATCH",
-                    "La verifica di sicurezza dell'autorizzazione non ÃƒÆ’Ã‚Â¨ riuscita."
+                    "La verifica di sicurezza dell'autorizzazione non ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¨ riuscita."
                 );
             }
 
@@ -436,7 +432,7 @@ export class NinjaAuth {
             if (!returnedTransaction) {
                 throw NinjaAuthErrorException(
                     "TRANSACTION_NOT_FOUND",
-                    "La transazione di autorizzazione non ÃƒÆ’Ã‚Â¨ piÃƒÆ’Ã‚Â¹ disponibile."
+                    "La transazione di autorizzazione non ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¨ piÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¹ disponibile."
                 );
             }
 
@@ -463,7 +459,7 @@ export class NinjaAuth {
                 if (!hasPrimaryError) {
                     throw NinjaAuthErrorException(
                         "TRANSACTION_CLEANUP_FAILED",
-                        "Non ÃƒÆ’Ã‚Â¨ stato possibile eliminare la transazione OAuth.",
+                        "Non ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¨ stato possibile eliminare la transazione OAuth.",
                         cleanupError
                     );
                 }
@@ -535,7 +531,7 @@ export class NinjaAuth {
 
             throw NinjaAuthErrorException(
                 "INVALID_RESPONSE",
-                "Il formato della risposta del servizio di autenticazione non ÃƒÆ’Ã‚Â¨ valido.",
+                "Il formato della risposta del servizio di autenticazione non ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¨ valido.",
                 result
             );
         }
@@ -545,7 +541,7 @@ export class NinjaAuth {
 
             throw NinjaAuthErrorException(
                 "EXCHANGE_FAILED",
-                "Non ÃƒÆ’Ã‚Â¨ stato possibile completare l'autenticazione. Riprova.",
+                "Non ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¨ stato possibile completare l'autenticazione. Riprova.",
                 result
             );
         }

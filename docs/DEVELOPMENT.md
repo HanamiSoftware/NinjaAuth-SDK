@@ -33,14 +33,13 @@ auth.init({
   environment: "development",
 });
 
-await auth.login();
+const user = await auth.login();
 const session = await auth.getSession();
 await auth.logout();
 ```
 
 The public constructor returns the same instance for repeated construction in the same JavaScript runtime. `init()` is an instance method, returns `this`, and may be called only once. A repeated initialization fails with `INITIALIZATION`.
 
-Do not use the former static form `NinjaAuth.init(config)`. The Extension Background currently creates the instance with `new NinjaAuth()` and initializes it once.
 
 ## Test workflow
 
@@ -58,15 +57,6 @@ The suite currently contains 37 test cases covering:
 - Transaction cleanup, including preservation of the primary error.
 - A complete mocked login → session lookup → logout sequence.
 
-Run:
-
-```bash
-npm run typecheck
-npm run build
-npm test
-```
-
-The suite was updated on dev, but it has not yet been executed on the resulting commit. Do not report it as passing until the commands have been run and their output reviewed.
 
 ## Environment configuration
 

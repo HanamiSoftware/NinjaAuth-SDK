@@ -6,7 +6,7 @@
  * 
  */
 export interface NinjaAuthConfig {
-    clientId?: string;
+    clientId: string;
     redirectUri: string;
     platform?: "extension" | "web";
     environment?: "development" | "production";

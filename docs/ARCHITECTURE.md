@@ -29,9 +29,10 @@ The SDK owns:
 
 For Web login, the SDK never receives the authorization code. It registers the verifier with Ninja Connect, opens the authorization popup, receives only a same-origin result signal from the application bridge, and then observes the application session through the application API.
 
-The SDK must not contain database credentials, refresh-token encryption keys, inter-service secrets, or raw session secrets.
-
 ### Consuming application
+
+
+### Ninja Specific Application
 
 Each application owns:
 - its own backend callback;
@@ -40,6 +41,11 @@ Each application owns:
 - its own capabilities, subscriptions, preferences, and business logic.
 
 For NinjaURL, the backend callback is `https://api.ninjaurl.io/v1/auth/callback`. It calls Ninja Connect server-to-server, creates the NinjaURL session, and sets a host-only HttpOnly cookie on `api.ninjaurl.io`. The Dashboard uses that cookie for its API requests.
+
+### Third Party SDK consumption
+
+- to be implemented
+ 
 
 ## Authentication flow
 
@@ -86,7 +92,6 @@ The Web PKCE verifier is not stored in localStorage/sessionStorage and is never 
 - No code, verifier, access token, refresh token, or session secret is posted to the opener.
 - The internal exchange response is no-store and only available to the trusted backend.
 - Application cookies are host-only and issued by the application API host.
-- Never use decoded-but-unverified JWT claims as an authorization source.
 - Cached user state is presentation state, not an authorization credential.
 
 ## Operational dependencies

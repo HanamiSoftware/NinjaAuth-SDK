@@ -1,6 +1,6 @@
 # Ninja Connect Auth API — SDK/Worker Contract
 
-This document describes the server-side Web PKCE flow and the existing Chrome Extension flow. The new broker runtime lives in [Ninja Connect — Workers/auth-broker](https://github.com/HanamiSoftware/Ninja-Connect/tree/feat/oauth-state-broker-worker-2026-11-09/Workers/auth-broker). The legacy NinjaURL Auth Worker continues to serve the existing Extension endpoints during this transition.
+This document describes the server-side Web PKCE flow and the existing Chrome Extension flow. The new broker runtime lives in [Ninja Connect — Workers/auth-broker](https://github.com/HanamiSoftware/Ninja-Connect/Workers/auth-broker). The legacy NinjaURL Auth Worker continues to serve the existing Extension endpoints during this transition.
 
 ## Public SDK contract
 
@@ -11,8 +11,8 @@ const auth = new NinjaAuth();
 auth.init({
   clientId: "YOUR_CLIENT_ID",
   redirectUri: "YOUR_REGISTERED_REDIRECT_URI",
-  platform: "web",
-  environment: "production"
+  platform: "web",//optional web by default
+  environment: "production"//optional production by default
 });
 
 const user = await auth.login();
@@ -69,7 +69,7 @@ Origin: https://dashboard.ninjaurl.io
 }
 ```
 
-The endpoint does not accept an authorization code. If client_id is omitted, the exact callback URI must resolve to exactly one active registered client. The endpoint returns the resolved clientId. The verifier is stored server-side for at most five minutes. A transaction is consumed atomically once; a replay or expired transaction is rejected.
+The endpoint does not accept an authorization code. The endpoint returns the resolved clientId. The verifier is stored server-side for at most five minutes. A transaction is consumed atomically once; a replay or expired transaction is rejected.
 
 ## Internal exchange contract
 
