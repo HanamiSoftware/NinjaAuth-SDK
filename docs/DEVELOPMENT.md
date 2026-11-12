@@ -1,4 +1,4 @@
-# NinjaAuth SDK — Development Guide (dev)
+# NinjaAuth SDK — Development Guide
 
 ## Requirements and commands
 
@@ -29,8 +29,8 @@ const auth = new NinjaAuth();
 auth.init({
   clientId: "YOUR_CLIENT_ID",
   redirectUri: "YOUR_REGISTERED_REDIRECT_URI",
-  platform: "extension",
-  environment: "development",
+  platform: "extension", // or "web"; default: web
+  environment: "development", // or "production"; default: production
 });
 
 const user = await auth.login();
@@ -40,23 +40,22 @@ await auth.logout();
 
 The public constructor returns the same instance for repeated construction in the same JavaScript runtime. `init()` is an instance method, returns `this`, and may be called only once. A repeated initialization fails with `INITIALIZATION`.
 
-
 ## Test workflow
 
-The automated suite lives in `test/ninja-auth.test.mjs`. It uses isolated module instances so the singleton state of one test cannot contaminate another. Chrome identity/storage and Worker HTTP responses are mocked at their boundaries.
+The automated suite lives in `test/ninja-auth.test.mjs`. It uses isolated module instances so the singleton state of one test cannot contaminate another. Chrome identity/storage and HTTP responses are mocked at their boundaries.
 
-The suite currently contains 37 test cases covering:
+Coverage includes:
+- Public exports, constructor singleton identity, initialization and configuration validation.
+- Chrome Extension PKCE, callback state validation, exchange response validation and transaction cleanup.
+- Web popup opening synchronously before asynchronous work.
+- Web state registration and application callback/session handling.
+- Web callback outcome and state validation.
+- Session observation and logout contracts for both platform endpoint families.
+- Popup cancellation/closure and provider error paths.
+- Malformed responses, network failures and operational errors.
+- Login → session lookup → logout sequences.
 
-- Export shape, constructor singleton identity, initialization and configuration validation.
-- Calls made before initialization and unsupported web login.
-- Authenticated and anonymous session responses.
-- The distinction between `INVALID_SESSION` and operational errors.
-- Network and malformed-response handling.
-- Current-session logout and its confirmation contract.
-- Authorization Code + PKCE, state validation, cancellation and exchange failures.
-- Transaction cleanup, including preservation of the primary error.
-- A complete mocked login → session lookup → logout sequence.
-
+Mocks prove SDK behavior against controlled responses. They do not prove live provider behavior, popup opener preservation, browser cookie acceptance or deployed CORS configuration.
 
 ## Environment configuration
 
@@ -65,24 +64,25 @@ The suite currently contains 37 test cases covering:
 - The SDK defaults to production; local development must opt into `environment: "development"`.
 - The authorization origin remains `https://auth.ninjaconnect.io`.
 
-Do not change Worker ports, CORS, cookie attributes, or deployment configuration without reviewing the corresponding Worker setup and consulting the project owner.
+Do not change Worker ports, CORS, cookie attributes or deployment configuration without reviewing the corresponding consuming application/Worker setup and consulting the project owner.
 
 ## Extension and Worker integration
 
 The Extension Background owns SDK initialization and translates SDK results into Chrome runtime messages. The Side Panel remains a UI client and must not implement OAuth or call Auth Worker session routes directly.
 
-A user cached in `chrome.storage.local` can restore the interface quickly, but it is presentation state, not proof of a currently valid server session. Protected operations must require a live session check. Temporary lookup failures must remain errors and must not be converted into an anonymous state or silently clear a cached user.
+A user cached in `chrome.storage.local` can restore the interface quickly, but it is presentation state, not proof of a currently valid server session. Protected operations must require a live session check. Temporary lookup failures must remain errors and must not be converted into anonymous state or silently clear a cached user.
 
-The Auth Worker currently resides in [NinjaURL-URL-Shortener/Workers/auth-worker](https://github.com/HanamiSoftware/NinjaURL-URL-Shortener/tree/master/Workers/auth-worker).
+The Auth Worker integration is maintained in the NinjaURL Workers repository. The SDK repository documents the client contract; it does not own that Worker deployment.
 
 ## Remaining validation
 
-- [ ] Run typecheck, build, and all 37 automated tests on the exact dev commit.
-- [ ] Review the public type exports, including whether `NinjaSession` should be exported from the package entry point.
-- [ ] Complete Chrome/Worker tests for cookies, CORS, cache restore, and protected-operation checks.
-- [ ] Record the exact SDK, Extension, and Worker commits used for end-to-end validation.
+- [ ] Run typecheck, build and all SDK automated tests on the exact candidate commit.
+- [ ] Verify built package exports, including `NinjaSession`, from the package tarball.
+- [ ] Complete Chrome/Worker checks for cookies, CORS, cache restore and protected-operation checks.
+- [ ] Complete Web browser checks for popup lifecycle, callback bridge, cookies, CORS, session lookup and logout.
+- [ ] Record exact SDK, Extension, Dashboard and Worker commits used for end-to-end validation.
 - [ ] Complete security review before any release decision.
 
 ## Release discipline
 
-The package and runtime source version are 0.1.0. No public release or tag is asserted. Agree explicitly on a future version before publishing.
+The package and runtime source version is recorded as 0.1.0. No public release or tag is asserted here. Agree explicitly on a future version before publishing.
