@@ -109,9 +109,9 @@ export class NinjaAuth {
 	/**
 	 * initialize the NinjaAuth instance with the provided configuration.
 	 * @param config - The configuration object for initializing the NinjaAuth instance.
-	 * @param config.clientId - The client ID for the application; optional for Web when callback lookup is unambiguous.
+	 * @param config.clientId - The client ID for the application;
 	 * @param config.redirectUri - The redirect URI for the application.
-	 * @param config.platform - The platform type, either "extension" or "web". Defaults to "extension".
+	 * @param config.platform - The platform type, either "extension" or "web". Defaults to "web".
 	 * @param config.environment - The environment type, either "development" or "production". Defaults to "production".
 	 * @param config.scopes - An optional array of scopes for the authentication request.
 	 * @returns The initialized NinjaAuth instance.
@@ -126,16 +126,6 @@ export class NinjaAuth {
     }
 
     const supportedPlatforms = config.platform ?? "web";
-
-    // if (
-    //     supportedPlatforms !== "extension" &&
-    //     supportedPlatforms !== "web"
-    // ) {
-    //     throw NinjaAuthErrorException(
-    //         "CONFIGURATION",
-    //         "NinjaAuth: platform must be 'extension' or 'web'."
-    //     );
-    // }
 
     if (!config.clientId) {
         throw NinjaAuthErrorException(
@@ -212,7 +202,7 @@ export class NinjaAuth {
                 if (callbackUrl.searchParams.get("state") !== state) {
                     throw NinjaAuthErrorException(
                         "STATE_MISMATCH",
-                        "La verifica di sicurezza dell'autorizzazione non ÃƒÂ¨ riuscita."
+                        "La verifica di sicurezza dell'autorizzazione non ÃƒÆ’Ã‚Â¨ riuscita."
                     );
                 }
 
@@ -221,7 +211,7 @@ export class NinjaAuth {
                     throw NinjaAuthErrorException(
                         callbackError === "access_denied" ? "OAUTH_DENIED" : "OAUTH_PROVIDER_ERROR",
                         callbackError === "access_denied"
-                            ? "L'autorizzazione ÃƒÂ¨ stata negata."
+                            ? "L'autorizzazione ÃƒÆ’Ã‚Â¨ stata negata."
                             : "Il provider di autenticazione ha restituito un errore."
                     );
                 }
@@ -422,7 +412,7 @@ export class NinjaAuth {
             if (callback.state !== state) {
                 throw NinjaAuthErrorException(
                     "STATE_MISMATCH",
-                    "La verifica di sicurezza dell'autorizzazione non ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¨ riuscita."
+                    "La verifica di sicurezza dell'autorizzazione non ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¨ riuscita."
                 );
             }
 
@@ -432,7 +422,7 @@ export class NinjaAuth {
             if (!returnedTransaction) {
                 throw NinjaAuthErrorException(
                     "TRANSACTION_NOT_FOUND",
-                    "La transazione di autorizzazione non ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¨ piÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¹ disponibile."
+                    "La transazione di autorizzazione non ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¨ piÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¹ disponibile."
                 );
             }
 
@@ -459,7 +449,7 @@ export class NinjaAuth {
                 if (!hasPrimaryError) {
                     throw NinjaAuthErrorException(
                         "TRANSACTION_CLEANUP_FAILED",
-                        "Non ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¨ stato possibile eliminare la transazione OAuth.",
+                        "Non ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¨ stato possibile eliminare la transazione OAuth.",
                         cleanupError
                     );
                 }
@@ -531,7 +521,7 @@ export class NinjaAuth {
 
             throw NinjaAuthErrorException(
                 "INVALID_RESPONSE",
-                "Il formato della risposta del servizio di autenticazione non ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¨ valido.",
+                "Il formato della risposta del servizio di autenticazione non ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¨ valido.",
                 result
             );
         }
@@ -541,7 +531,7 @@ export class NinjaAuth {
 
             throw NinjaAuthErrorException(
                 "EXCHANGE_FAILED",
-                "Non ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¨ stato possibile completare l'autenticazione. Riprova.",
+                "Non ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¨ stato possibile completare l'autenticazione. Riprova.",
                 result
             );
         }
