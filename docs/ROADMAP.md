@@ -2,7 +2,7 @@
 
 **Last reviewed:** 12 November 2026  
 **Repository:** `HanamiSoftware/NinjaAuth-SDK`  
-**Branch for this documentation revision:** `docs/alignment-2026-11-12` (created from `dev`)  
+**Branch for this documentation revision:** `dev`  
 **Package/source version recorded in repository:** `0.1.0`  
 **Release status:** not declared release-ready
 
@@ -81,6 +81,7 @@ Mocks, typecheck and build are not substitutes for live integration testing.
 
 - [ ] Confirm the public API/type surface with a package-consumer type test.
 - [ ] Verify package contents and exports from the built tarball, not only source imports.
+- [ ] **Provide the Web callback bridge as an official, reusable NinjaAuth SDK asset.** Start from the existing `auth-callback.html` in NinjaURL Dashboard, adapt it into a provider- and application-neutral page, and document how consumers obtain and host it. Preserve the current bridge contract (state plus success/error outcome only; no authorization codes, verifiers, tokens or cookies), and explicitly document/test its same-origin, opener and target-origin requirements. Do not make the Dashboard's branded page or its application-specific backend callback a dependency for external SDK consumers.
 - [ ] Define release/tag/version policy and publish only after explicit approval.
 
 ### P2 — Future capabilities
