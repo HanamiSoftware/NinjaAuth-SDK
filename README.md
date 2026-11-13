@@ -95,6 +95,7 @@ Keep the bridge page minimal, set a `no-referrer` policy, and do not load analyt
 - [SDK ↔ service API contract](docs/API-CONTRACT.md)
 - [Development guide](docs/DEVELOPMENT.md)
 - [Test plan](docs/TEST-PLAN.md)
+- [Browser E2E tests](docs/BROWSER-E2E.md)
 - [Historical Core checkpoint](docs/NINJAAUTH-CORE-CHECKPOINT.md)
 
 ## Related component
