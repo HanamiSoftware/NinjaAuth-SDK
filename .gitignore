@@ -371,3 +371,7 @@ FodyWeavers.xsd
 /test/dist/index.js.map
 /test/dist/index.cjs.map
 /.editorconfig
+
+# Playwright browser test output
+/playwright-report/
+/test-results/
