@@ -197,6 +197,13 @@ export class NinjaAuth {
                     authorizationUrl,
                     prepared
                 );
+
+                if (responseUrl === null) {
+                    // Same-tab navigation unloads this document. The new app
+                    // document must initialize the SDK and call getSession().
+                    return new Promise<NinjaUser>(() => {});
+                }
+
                 const callbackUrl = new URL(responseUrl);
 
                 if (callbackUrl.searchParams.get("state") !== state) {

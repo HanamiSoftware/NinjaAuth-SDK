@@ -10,13 +10,16 @@ Runner: Node.js built-in test runner.
 Coverage includes:
 - public constructor/singleton and one-shot initialization;
 - Chrome Extension PKCE, state validation, exchange response validation, and cleanup;
-- Web popup opened synchronously before asynchronous work;
+- Web desktop popup opened synchronously before asynchronous work;
+- Web mobile same-tab redirect to the broker-provided authorization URL, without opening a popup;
+- mobile detection for iPhone/Android and iPadOS Safari desktop mode;
 - Web POST /v1/state request with client ID, exact backend callback, state, and verifier;
 - Web callback outcome accepted only from the popup and the opener's exact origin;
 - state mismatch rejected before session lookup;
 - Web success reads the application session endpoint with credentials;
 - popup blocked/closed and provider cancellation/error paths;
 - callback bridge sends only state and outcome; authorization code, verifier, tokens, and cookie are never posted;
+- same-tab callback bridge handles a missing opener, scrubs callback parameters, and returns to the application origin;
 - session observation and logout contracts for both platform endpoint families;
 - malformed responses, network failures, and operational errors remain errors.
 
@@ -60,8 +63,11 @@ Run from the real Dashboard HTTPS origin using the exact callback registered for
 | WEB-12 | Credentialed session lookup | SDK calls https://api.ninjaurl.io/v1/session; browser sends the NinjaURL cookie |
 | WEB-13 | Logout | SDK calls the NinjaURL API /v1/logout; cookie is cleared and session revoked |
 | WEB-14 | Replay | A second internal exchange for the same state is rejected |
+| WEB-15 | Mobile launch | iPhone/Android/iPadOS use same-tab navigation to the Ninja Connect authorization endpoint; no popup is opened and the /v1/state PKCE contract is unchanged |
+| WEB-16 | Mobile callback | Bridge works without window.opener, removes callback parameters, and returns to the application origin |
+| WEB-17 | Mobile session restore | After the app reloads, NinjaAuth is initialized again and getSession() observes the application cookie |
 
-WEB-11 through WEB-14 require real browser/Worker testing. SDK mocks do not prove them.
+WEB-11 through WEB-14 require real browser/Worker testing. WEB-15 through WEB-17 require real mobile browser testing (iOS Safari/Chrome and Android Chrome) in addition to SDK mocks. SDK mocks do not prove browser navigation, cookie, or session behavior.
 
 ## 4. Cookie and CORS checks
 
@@ -84,6 +90,7 @@ WEB-11 through WEB-14 require real browser/Worker testing. SDK mocks do not prov
 - [ ] Verify the API Worker route api.ninjaurl.io/v1/* serves /v1/auth/callback, /v1/session, and /v1/logout.
 - [ ] Verify Dashboard hosts /auth-callback.html at the same origin as the opener.
 - [ ] Confirm effective COOP/COEP response headers do not sever the popup opener.
+- [ ] Verify iOS Safari/Chrome and Android Chrome complete the same-tab flow and restore the app session after the callback bridge returns to the application origin.
 
 ## 6. Evidence record
 

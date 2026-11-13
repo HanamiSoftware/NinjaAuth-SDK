@@ -23,6 +23,7 @@ const AUTHENTICATED_SESSION = {
 let originalFetch;
 let originalChrome;
 let originalWindow;
+let originalNavigatorDescriptor;
 let chromeMock;
 let moduleSequence = 0;
 
@@ -104,6 +105,7 @@ test.beforeEach(() => {
     originalFetch = globalThis.fetch;
     originalChrome = globalThis.chrome;
     originalWindow = globalThis.window;
+    originalNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
     chromeMock = createChromeMock();
     globalThis.chrome = chromeMock;
 });
@@ -121,6 +123,12 @@ test.afterEach(() => {
         delete globalThis.window;
     } else {
         globalThis.window = originalWindow;
+    }
+
+    if (originalNavigatorDescriptor) {
+        Object.defineProperty(globalThis, "navigator", originalNavigatorDescriptor);
+    } else {
+        delete globalThis.navigator;
     }
 });
 
@@ -808,7 +816,7 @@ test("login, live session lookup, and logout complete in sequence", async () => 
 function brokerAuthorizationUrl(state) {
     const url = new URL("https://auth.ninjaconnect.io/oauth2/authorize");
     url.searchParams.set("client_id", "shared-authgear-client");
-    url.searchParams.set("redirect_uri", "https://auth.ninjaconnect.io/call");
+    url.searchParams.set("redirect_uri", "https://auth.ninjaconnect.io/v1/callback");
     url.searchParams.set("state", state);
     url.searchParams.set("response_type", "code");
     url.searchParams.set("scope", "openid profile email offline_access");
@@ -820,13 +828,17 @@ function brokerAuthorizationUrl(state) {
 function createWebWindowMock(options = {}) {
     const listeners = new Set();
     let lastAuthorizationUrl;
+    let lastRedirectedUrl;
     const values = new Map();
     let openCount = 0;
 
     const windowMock = {
         location: {
             origin: "https://example.com",
-            href: "https://example.com/"
+            href: "https://example.com/",
+            assign(url) {
+                lastRedirectedUrl = url;
+            }
         },
         sessionStorage: {
             setItem(key, value) { values.set(key, value); },
@@ -883,7 +895,8 @@ function createWebWindowMock(options = {}) {
         popup,
         values,
         get openCount() { return openCount; },
-        get authorizationUrl() { return lastAuthorizationUrl; }
+        get authorizationUrl() { return lastAuthorizationUrl; },
+        get redirectedUrl() { return lastRedirectedUrl; }
     };
 }
 
@@ -935,7 +948,7 @@ test("web login opens a popup synchronously and completes through the backend ca
     assert.equal(launchedUrl.origin, "https://auth.ninjaconnect.io");
     assert.equal(launchedUrl.pathname, "/oauth2/authorize");
     assert.equal(launchedUrl.searchParams.get("client_id"), "shared-authgear-client");
-    assert.equal(launchedUrl.searchParams.get("redirect_uri"), "https://auth.ninjaconnect.io/call");
+    assert.equal(launchedUrl.searchParams.get("redirect_uri"), "https://auth.ninjaconnect.io/v1/callback");
     assert.equal(browser.popup.closed, true);
     assert.equal(browser.values.size, 0);
 });
@@ -1089,4 +1102,134 @@ test("web callback bridge forwards a generic error without forwarding provider d
         state: "123e4567-e89b-12d3-a456-426614174000",
         error: "access_denied"
     });
+});
+
+
+// Mobile Web authorization: same-tab navigation to the broker-provided URL.
+test("mobile Web login navigates the current tab to Ninja Connect without opening a popup", async () => {
+    const { auth } = await initialize({
+        platform: "web",
+        redirectUri: "https://api.example.com/v1/auth/callback"
+    });
+    const browser = createWebWindowMock();
+    globalThis.window = browser.window;
+    Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: {
+            userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1",
+            platform: "iPhone",
+            maxTouchPoints: 5
+        }
+    });
+
+    let stateRequest;
+    globalThis.fetch = async (url, options) => {
+        assert.equal(url, "http://127.0.0.1:8787/v1/state");
+        assert.equal(options.method, "POST");
+        assert.equal(options.credentials, "omit");
+        stateRequest = JSON.parse(options.body);
+        return response({
+            success: true,
+            data: {
+                clientId: "test-client",
+                authorizationUrl: brokerAuthorizationUrl(stateRequest.state)
+            }
+        });
+    };
+
+    let loginSettled = false;
+    const loginPromise = auth.login();
+    loginPromise.then(
+        () => { loginSettled = true; },
+        () => { loginSettled = true; }
+    );
+
+    for (let attempt = 0; attempt < 50 && !browser.redirectedUrl; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    assert.ok(browser.redirectedUrl, "same-tab navigation should be requested");
+    assert.equal(browser.openCount, 0, "mobile login must not open a popup");
+    assert.match(stateRequest.state, /^[0-9a-f-]{36}$/i);
+    assert.match(stateRequest.code_verifier, /^[A-Za-z0-9_-]{43}$/);
+    assert.equal(stateRequest.redirect_uri, "https://api.example.com/v1/auth/callback");
+
+    const authorizationUrl = new URL(browser.redirectedUrl);
+    assert.equal(authorizationUrl.origin, "https://auth.ninjaconnect.io");
+    assert.equal(authorizationUrl.pathname, "/oauth2/authorize");
+    assert.equal(authorizationUrl.searchParams.get("state"), stateRequest.state);
+    assert.equal(authorizationUrl.searchParams.get("redirect_uri"), "https://auth.ninjaconnect.io/v1/callback");
+
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(loginSettled, false, "the old document's login promise must remain pending during navigation");
+});
+
+test("iPadOS Safari in desktop mode selects same-tab authorization", async () => {
+    const { auth } = await initialize({
+        platform: "web",
+        redirectUri: "https://api.example.com/v1/auth/callback"
+    });
+    const browser = createWebWindowMock();
+    globalThis.window = browser.window;
+    Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: {
+            userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15",
+            platform: "MacIntel",
+            maxTouchPoints: 5
+        }
+    });
+
+    globalThis.fetch = async (_url, options) => {
+        const body = JSON.parse(options.body);
+        return response({
+            success: true,
+            data: {
+                clientId: "test-client",
+                authorizationUrl: brokerAuthorizationUrl(body.state)
+            }
+        });
+    };
+
+    const loginPromise = auth.login();
+    loginPromise.catch(() => {});
+    for (let attempt = 0; attempt < 50 && !browser.redirectedUrl; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    assert.ok(browser.redirectedUrl, "iPadOS desktop-mode Safari should use same-tab navigation");
+    assert.equal(browser.openCount, 0);
+});
+
+test("mobile callback bridge without an opener scrubs callback parameters and returns to the app origin", async () => {
+    const { completeWebAuthCallback } = await createClient();
+    let scrubbedUrl;
+    let returnedUrl;
+
+    globalThis.window = {
+        location: {
+            origin: "https://example.com",
+            href: "https://example.com/auth-callback.html?state=123e4567-e89b-12d3-a456-426614174000&result=success&code=must-not-survive",
+            replace(url) {
+                returnedUrl = url;
+            }
+        },
+        history: {
+            replaceState(_state, _title, url) {
+                scrubbedUrl = url;
+            }
+        },
+        opener: null,
+        close() {
+            assert.fail("same-tab callback must not try to close a popup");
+        }
+    };
+
+    completeWebAuthCallback();
+
+    assert.equal(returnedUrl, "https://example.com");
+    const cleaned = new URL(scrubbedUrl);
+    for (const key of ["state", "result", "error", "code", "code_verifier", "access_token", "refresh_token"]) {
+        assert.equal(cleaned.searchParams.has(key), false);
+    }
 });

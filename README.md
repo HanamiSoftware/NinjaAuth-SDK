@@ -2,7 +2,7 @@
 
 NinjaAuth is the TypeScript client SDK used by applications integrating with **Ninja Connect**, the shared identity broker.
 
-> **Development status:** Core 0.1 is implemented for Chrome Extension and Web popup Authorization Code + PKCE flows, but it is **not release-ready**. SDK unit tests and CI exist; a passing mocked suite does not replace live browser, cookie, CORS, and backend integration checks. See [the branch roadmap](docs/ROADMAP.md).
+> **Development status:** Core 0.1 is implemented for Chrome Extension and Web Authorization Code + PKCE flows (desktop popup and mobile same-tab), but it is **not release-ready**. SDK unit tests and CI exist; a passing mocked suite does not replace live browser, cookie, CORS, and backend integration checks. See [the branch roadmap](docs/ROADMAP.md).
 
 ## Public API
 
@@ -32,7 +32,7 @@ The singleton is scoped to one JavaScript runtime. Separate pages, workers, or e
 ## Implemented behavior
 
 - Chrome Extension Authorization Code + PKCE login.
-- Web popup Authorization Code + PKCE login using a server-side OAuth transaction and an application backend callback.
+- Web Authorization Code + PKCE login using a server-side OAuth transaction and an application backend callback (desktop popup or mobile same-tab navigation).
 - Application-owned Web sessions: the consuming backend creates its own HttpOnly cookie; NinjaAuth reads and logs out through the application API origin derived from `redirectUri`.
 - Exported `completeWebAuthCallback()` helper for a same-origin result bridge; it forwards only state and outcome, never the authorization code or tokens.
 - PKCE S256 and UUID state generation, with callback-state validation.
@@ -46,7 +46,7 @@ Only an explicit `401 INVALID_SESSION` response is normalized to an unauthentica
 
 ## Web login
 
-The Web platform uses a popup and a backend callback. Call `login()` directly from a user gesture; the SDK opens the blank popup synchronously before asynchronous PKCE and transaction-registration work.
+The Web platform uses a backend callback. On desktop browsers, NinjaAuth opens a popup synchronously from the user gesture. On mobile browsers (including iPadOS Safari in desktop mode), it navigates the current tab to the authorization URL returned by Ninja Connect instead. In both cases the browser enters the Ninja Connect flow; the SDK does not construct provider URLs or handle Authgear credentials. On mobile, the current document unloads, so its `login()` promise does not resolve. After the backend establishes the application cookie and the same-origin callback bridge returns to the app origin, initialize NinjaAuth again and call `getSession()` to observe the session.
 
 ```ts
 import { NinjaAuth } from "@ninjaconnect/auth";
@@ -69,13 +69,13 @@ loginButton.addEventListener("click", async () => {
 });
 ```
 
-`redirectUri` is the exact application backend callback registered for this client. The SDK registers state and the PKCE verifier with the broker, then opens the authorization popup. The authorization code is delivered to the backend callback, not to the opener page.
+`redirectUri` is the exact application backend callback registered for this client. The SDK registers state and the PKCE verifier with the broker, then launches the authorization URL returned by Ninja Connect. AuthGear returns to the central Ninja Connect callback, where the broker completes the upstream exchange server-to-server and issues a short-lived, one-time Ninja Connect application code. Only that application code reaches the consuming application's backend callback; the AuthGear authorization code and tokens are not exposed to the browser application.
 
-The consuming application's backend completes the server-to-server exchange, resolves the application profile, creates its own application session, and sets its own HttpOnly cookie. It redirects the popup to a minimal same-origin bridge page. The bridge sends only `state` and the success/error outcome through `postMessage`; it must never forward the code, verifier, access token, refresh token, or session cookie.
+The consuming application's backend redeems the one-time application code with Ninja Connect server-to-server, resolves the application profile, creates its own application session, and sets its own HttpOnly cookie. It redirects the browser to a minimal same-origin bridge page. With a desktop popup, the bridge sends only `state` and the success/error outcome through `postMessage`; it must never forward the code, verifier, access token, refresh token, or session cookie. In same-tab mobile mode there is no opener: the bridge removes callback parameters from the URL and redirects to the application origin. The app then reinitializes the SDK and calls `getSession()`; no previous page/UI state is persisted by NinjaAuth.
 
 After the bridge response, NinjaAuth verifies state and reads the consuming application's session through the API origin derived from `redirectUri`. For the Web platform, `getSession()` and `logout()` use the application's own session endpoints. The Chrome Extension platform retains its existing broker session endpoints.
 
-A same-origin bridge page can use the exported helper:
+A same-origin bridge page can use the exported helper. It supports both popup and same-tab completion:
 
 ```ts
 import { completeWebAuthCallback } from "@ninjaconnect/auth";
@@ -85,7 +85,7 @@ completeWebAuthCallback();
 
 Keep the bridge page minimal, set a `no-referrer` policy, and do not load analytics or third-party scripts. The backend must validate the return origin against an allowlist.
 
-**Verification boundary:** automated SDK tests cover mocked Web behavior. Real-browser verification is still required for popup opener preservation, credentialed CORS, cookie acceptance, callback registration, session refresh, and logout.
+**Verification boundary:** automated SDK tests cover mocked Web behavior. Real-browser verification is still required for popup opener preservation, mobile same-tab navigation and session restoration, credentialed CORS, cookie acceptance, callback registration, session refresh, and logout.
 
 ## Documentation
 

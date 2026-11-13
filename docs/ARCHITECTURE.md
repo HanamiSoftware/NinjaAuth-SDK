@@ -20,7 +20,7 @@ The SDK owns:
 - session observation and logout through the correct platform endpoint;
 - typed errors and lifecycle semantics.
 
-For Web login, the SDK registers the PKCE transaction with the broker, opens the authorization popup, receives only a same-origin result signal from the application bridge, and then observes the application session through the application API. The SDK does not receive or forward the authorization code through popup messaging.
+For Web login, the SDK registers the PKCE transaction with the broker and launches the broker-provided authorization URL. Desktop browsers use a popup and receive only a same-origin result signal from the application bridge. Mobile browsers use the current tab; after the backend establishes the application session, the bridge returns to the application origin without requiring an opener. The app reinitializes the SDK and observes the session through the application API. The SDK does not receive or forward authorization codes or tokens through popup messaging.
 
 ### Consuming application
 
@@ -30,7 +30,7 @@ Each consuming application owns:
 - its application session records and cookie;
 - its capabilities, subscriptions, preferences and business logic.
 
-For NinjaURL, the application callback is `https://api.ninjaurl.io/v1/auth/callback`. The NinjaURL backend completes the server-to-server exchange, creates the NinjaURL application session and sets the host-only HttpOnly cookie on `api.ninjaurl.io`. The Dashboard sends credentialed requests to that API; it does not read the cookie.
+For NinjaURL, the application callback is `https://api.ninjaurl.io/v1/auth/callback`. The callback receives a one-time Ninja Connect application code, redeems it server-to-server, creates the NinjaURL application session and sets the host-only HttpOnly cookie on `api.ninjaurl.io`. The Dashboard sends credentialed requests to that API; it does not read the cookie.
 
 ### Third-party SDK consumers
 
@@ -40,14 +40,14 @@ The SDK is designed to be provider-neutral and reusable by independent applicati
 
 ### Web
 
-1. The SDK opens a popup synchronously from a user gesture.
+1. The SDK detects the browser context. Desktop browsers open a popup synchronously from the user gesture; mobile browsers use same-tab navigation.
 2. It generates PKCE S256 and UUID state.
 3. It registers state, client ID, verifier and exact application callback with the broker.
-4. The broker returns an authorization URL; the provider redirects the authorization code to the broker callback.
-5. The consuming application's backend completes the protected server-to-server exchange.
-6. The application backend resolves identity, creates its own session and sets its own HttpOnly cookie.
-7. The backend redirects to a same-origin bridge page. The bridge posts only state and outcome; it never forwards code, tokens, verifier or cookie.
-8. The SDK validates state and reads the application session through the API origin derived from the registered callback.
+4. The broker returns its authorization URL. The browser navigates to the Ninja Connect authorization endpoint; AuthGear returns to the central broker callback.
+5. The broker exchanges the AuthGear authorization code server-to-server and issues a short-lived, one-time Ninja Connect application code bound to the registered application callback.
+6. The browser returns to the application backend callback, which redeems the application code with Ninja Connect server-to-server, creates its own session and sets its own HttpOnly cookie.
+7. The backend redirects to a same-origin bridge page. With a popup, the bridge posts only state and outcome. Without an opener (same-tab mobile), the bridge removes callback parameters and redirects to the application origin.
+8. On desktop, the SDK validates the bridge message and reads the application session. On mobile, the new application document reinitializes the SDK and calls `getSession()`; the `login()` promise in the unloaded document does not resolve.
 
 ### Chrome Extension
 
@@ -71,7 +71,7 @@ NinjaURL stores a hash of its session secret and encrypts the upstream refresh t
 - Exact callback URI registration; no wildcard/prefix matching.
 - The calling application origin must be validated by the relevant backend services.
 - Inter-service credentials remain server-side and must never be bundled into browser code.
-- The authorization code is delivered to a backend callback, not the parent JavaScript context.
+- The AuthGear authorization code is delivered to the central Ninja Connect callback and exchanged server-to-server; the application backend receives only a one-time Ninja Connect code.
 - No code, verifier, access token, refresh token or session secret is posted to the opener.
 - Application cookies are host-only and issued by the application API host.
 - Cached user state is presentation state, not an authorization credential.
