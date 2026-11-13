@@ -11,6 +11,7 @@ This directory documents the SDK implementation on the branch being reviewed. Th
 | [Architecture](ARCHITECTURE.md) | Responsibility boundaries and stable architectural decisions |
 | [Development guide](DEVELOPMENT.md) | Local development workflow and validation commands |
 | [Test plan](TEST-PLAN.md) | Automated regression coverage and browser/Worker integration matrix |
+| [Browser E2E](BROWSER-E2E.md) | Playwright setup, browser scenarios, diagnostics and test boundaries |
 | [Core checkpoint](NINJAAUTH-CORE-CHECKPOINT.md) | Historical snapshot; not a live status source |
 
 The roadmap is the status authority for the branch under review. The API contract is the contract authority. Historical checkpoints must not be treated as current implementation status.
