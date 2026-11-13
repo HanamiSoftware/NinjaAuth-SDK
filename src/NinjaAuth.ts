@@ -411,6 +411,13 @@ export class NinjaAuth {
                     preparedAuthorization
                 );
 
+            if (responseUrl === null) {
+                throw NinjaAuthErrorException(
+                    "AUTHORIZATION_FAILED",
+                    "NinjaAuth: il flusso di autorizzazione di questa piattaforma non supporta la navigazione nella scheda corrente."
+                );
+            }
+
             const callback =
                 parseAuthorizationCallback(responseUrl);
 
