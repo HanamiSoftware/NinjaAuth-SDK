@@ -69,7 +69,15 @@ Run from the real Dashboard HTTPS origin using the exact callback registered for
 
 WEB-11 through WEB-14 require real browser/Worker testing. WEB-15 through WEB-17 require real mobile browser testing (iOS Safari/Chrome and Android Chrome) in addition to SDK mocks. SDK mocks do not prove browser navigation, cookie, or session behavior.
 
-## 4. Cookie and CORS checks
+## 4. Automated browser E2E
+
+The SDK browser suite lives in `e2e/auth-flow.spec.mjs` and runs with Playwright Test against the compiled SDK in headless Chromium. It covers desktop popup completion, iPhone and Android same-tab redirects, iPadOS desktop-mode detection, and the HttpOnly application-session cookie round-trip using deterministic in-memory route fixtures.
+
+Run `npm run build`, install the browser with `npx playwright install chromium`, then run `npm run test:e2e`. See [Browser E2E](BROWSER-E2E.md) for setup and diagnostics.
+
+These tests do not contact AuthGear, deployed Ninja Connect/NinjaURL services, Cloudflare routes, or live credentials. They are browser-level SDK integration tests. Real iOS Safari and Android Chrome testing and a separate staging integration suite remain required.
+
+## 5. Cookie and CORS checks
 
 - [ ] Cookie is set only by a response from api.ninjaurl.io.
 - [ ] Cookie has no Domain attribute; it is host-only.
@@ -81,7 +89,7 @@ WEB-11 through WEB-14 require real browser/Worker testing. WEB-15 through WEB-17
 - [ ] SDK JavaScript cannot read the cookie.
 - [ ] No code, verifier, access token, refresh token, or raw session secret appears in URLs, logs, local/session storage, or popup messages.
 
-## 5. Operational prerequisites
+## 6. Operational prerequisites
 
 - [ ] Apply the internal OAuth client registry migration from Ninja Platform Data PR #17 before testing /v1/state.
 - [ ] Register the exact callback https://api.ninjaurl.io/v1/auth/callback for the NinjaURL Web client in the internal registry and upstream OAuth provider.
@@ -92,7 +100,7 @@ WEB-11 through WEB-14 require real browser/Worker testing. WEB-15 through WEB-17
 - [ ] Confirm effective COOP/COEP response headers do not sever the popup opener.
 - [ ] Verify iOS Safari/Chrome and Android Chrome complete the same-tab flow and restore the app session after the callback bridge returns to the application origin.
 
-## 6. Evidence record
+## 7. Evidence record
 
 For every run, record:
 - repository, branch, and exact commit SHA for SDK, Worker, and Dashboard;
