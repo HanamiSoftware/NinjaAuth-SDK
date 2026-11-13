@@ -1201,6 +1201,43 @@ test("iPadOS Safari in desktop mode selects same-tab authorization", async () =>
     assert.equal(browser.openCount, 0);
 });
 
+test("Android Chrome selects same-tab authorization", async () => {
+    const { auth } = await initialize({
+        platform: "web",
+        redirectUri: "https://api.example.com/v1/auth/callback"
+    });
+    const browser = createWebWindowMock();
+    globalThis.window = browser.window;
+    Object.defineProperty(globalThis, "navigator", {
+        configurable: true,
+        value: {
+            userAgent: "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+            platform: "Linux armv8l",
+            maxTouchPoints: 5
+        }
+    });
+
+    globalThis.fetch = async (_url, options) => {
+        const body = JSON.parse(options.body);
+        return response({
+            success: true,
+            data: {
+                clientId: "test-client",
+                authorizationUrl: brokerAuthorizationUrl(body.state)
+            }
+        });
+    };
+
+    const loginPromise = auth.login();
+    loginPromise.catch(() => {});
+    for (let attempt = 0; attempt < 50 && !browser.redirectedUrl; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    assert.ok(browser.redirectedUrl, "Android Chrome should navigate in the current tab");
+    assert.equal(browser.openCount, 0);
+});
+
 test("mobile callback bridge without an opener scrubs callback parameters and returns to the app origin", async () => {
     const { completeWebAuthCallback } = await createClient();
     let scrubbedUrl;

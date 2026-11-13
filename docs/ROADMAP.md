@@ -2,7 +2,7 @@
 
 **Last reviewed:** 13 November 2026  
 **Repository:** `HanamiSoftware/NinjaAuth-SDK`  
-**Branch for this documentation revision:** `dev`  
+**Branch for this documentation revision:** `feature/auth-mobile-redirect-flow`  
 **Package/source version recorded in repository:** `0.1.0`  
 **Release status:** not declared release-ready
 
