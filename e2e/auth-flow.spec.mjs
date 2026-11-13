@@ -60,6 +60,11 @@ const BRIDGE_HTML = `<!doctype html>
 </body>
 </html>`;
 
+function redirectDocument(target) {
+    const safeTarget = JSON.stringify(target).replace(/</g, "\\\\u003c");
+    return `<!doctype html><html><body><script>window.location.replace(${safeTarget});</script></body></html>`;
+}
+
 async function installOAuthRoutes(context) {
     const transactions = [];
     const authorizationRequests = [];
@@ -146,20 +151,24 @@ async function installOAuthRoutes(context) {
             authorizationRequests.push(request.url());
             const state = url.searchParams.get("state");
             return route.fulfill({
-                status: 302,
-                headers: {
-                    location: `https://auth.ninjaconnect.io/v1/callback?code=simulated-provider-code&state=${encodeURIComponent(state)}`
-                }
+                status: 200,
+                contentType: "text/html; charset=utf-8",
+                headers: { "cache-control": "no-store" },
+                body: redirectDocument(
+                    `https://auth.ninjaconnect.io/v1/callback?code=simulated-provider-code&state=${encodeURIComponent(state)}`
+                )
             });
         }
 
         if (url.pathname === "/v1/callback") {
             const state = url.searchParams.get("state");
             return route.fulfill({
-                status: 302,
-                headers: {
-                    location: `${APP_CALLBACK}?code=simulated-ninja-connect-app-code&state=${encodeURIComponent(state)}`
-                }
+                status: 200,
+                contentType: "text/html; charset=utf-8",
+                headers: { "cache-control": "no-store" },
+                body: redirectDocument(
+                    `${APP_CALLBACK}?code=simulated-ninja-connect-app-code&state=${encodeURIComponent(state)}`
+                )
             });
         }
 
@@ -177,13 +186,16 @@ async function installOAuthRoutes(context) {
             });
             const state = url.searchParams.get("state");
             return route.fulfill({
-                status: 302,
+                status: 200,
+                contentType: "text/html; charset=utf-8",
                 headers: {
                     // Host-only application session cookie, as set by the real backend.
                     "set-cookie": "ninja_session=e2e-session; Path=/; HttpOnly; Secure; SameSite=Strict",
-                    location: `${APP_ORIGIN}/auth-callback.html?state=${encodeURIComponent(state)}&result=success`,
                     "cache-control": "no-store"
-                }
+                },
+                body: redirectDocument(
+                    `${APP_ORIGIN}/auth-callback.html?state=${encodeURIComponent(state)}&result=success`
+                )
             });
         }
 
