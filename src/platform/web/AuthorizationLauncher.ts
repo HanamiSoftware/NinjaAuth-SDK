@@ -19,14 +19,45 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Detect phones and tablets, including iPadOS Safari in desktop mode.
+ * This only selects the navigation container; OAuth remains broker-owned.
+ */
+function isMobileBrowser(): boolean {
+    if (typeof navigator === "undefined") {
+        return false;
+    }
+
+    const userAgent = navigator.userAgent ?? "";
+    const platform = navigator.platform ?? "";
+    const isIPadOS = platform === "MacIntel" && navigator.maxTouchPoints > 1;
+
+    return (
+        /Android|iPhone|iPad|iPod|IEMobile|Windows Phone|BlackBerry|BB10|Opera Mini/i.test(userAgent) ||
+        isIPadOS
+    );
+}
+
 export class WebAuthorizationLauncher implements AuthorizationLauncher {
     /**
      * Open the blank popup synchronously while the caller still has the
      * browser's user-activation context. The authorization URL is assigned
      * only after the asynchronous PKCE challenge and server transaction setup.
      */
-    public prepareAuthorization(): WindowProxy {
-        if (typeof window === "undefined" || typeof window.open !== "function") {
+    public prepareAuthorization(): WindowProxy | null {
+        if (typeof window === "undefined") {
+            throw NinjaAuthErrorException(
+                "AUTHORIZATION_FAILED",
+                "NinjaAuth: il browser non è disponibile in questo contesto."
+            );
+        }
+
+        // Mobile browsers use the current tab; no popup or opener is required.
+        if (isMobileBrowser()) {
+            return null;
+        }
+
+        if (typeof window.open !== "function") {
             throw NinjaAuthErrorException(
                 "AUTHORIZATION_FAILED",
                 "NinjaAuth: il popup di autenticazione non è disponibile in questo contesto."
@@ -67,10 +98,11 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
     public async launchAuthorization(
         authorizationUrl: string,
         prepared?: unknown
-    ): Promise<string> {
-        const popup = prepared as WindowProxy | undefined;
+    ): Promise<string | null> {
+        const sameTab = prepared === null;
+        const popup = prepared as WindowProxy | null | undefined;
 
-        if (!popup || popup.closed) {
+        if (!sameTab && (!popup || popup.closed)) {
             throw NinjaAuthErrorException(
                 "AUTHORIZATION_FAILED",
                 "NinjaAuth: la finestra di autenticazione non è disponibile."
@@ -108,6 +140,28 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
             throw NinjaAuthErrorException(
                 "AUTHORIZATION_FAILED",
                 "NinjaAuth: il popup di autenticazione non è disponibile in questo contesto."
+            );
+        }
+
+        if (sameTab) {
+            // The current document will unload. The backend callback establishes
+            // the application session and returns the browser to the app origin.
+            try {
+                window.location.assign(authorizeUrl.toString());
+                return null;
+            } catch (error) {
+                throw NinjaAuthErrorException(
+                    "AUTHORIZATION_FAILED",
+                    "NinjaAuth: impossibile avviare la navigazione di autenticazione.",
+                    error
+                );
+            }
+        }
+
+        if (!popup) {
+            throw NinjaAuthErrorException(
+                "AUTHORIZATION_FAILED",
+                "NinjaAuth: la finestra di autenticazione non è disponibile."
             );
         }
 
@@ -208,10 +262,10 @@ export class WebAuthorizationLauncher implements AuthorizationLauncher {
  * The bridge forwards only state and the outcome; never code, tokens or cookies.
  */
 export function completeWebAuthCallback(): void {
-    if (typeof window === "undefined" || !window.opener) {
+    if (typeof window === "undefined") {
         throw NinjaAuthErrorException(
             "INVALID_CALLBACK",
-            "NinjaAuth: questa pagina di callback non è stata aperta dal popup di login."
+            "NinjaAuth: il browser non è disponibile in questo contesto."
         );
     }
 
@@ -243,6 +297,14 @@ export function completeWebAuthCallback(): void {
         callbackUrl.searchParams.delete(key);
     }
     window.history.replaceState(null, "", callbackUrl.toString());
+
+    // In same-tab mobile mode there is no opener. The backend has already
+    // established the HttpOnly application session; return to the app origin
+    // so it can reinitialize NinjaAuth and observe that session with getSession().
+    if (!window.opener) {
+        window.location.replace(window.location.origin);
+        return;
+    }
 
     window.opener.postMessage(message, window.location.origin);
     window.close();

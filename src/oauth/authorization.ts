@@ -9,7 +9,7 @@ export interface AuthorizationLauncher {
     launchAuthorization(
         authorizationUrl: string,
         prepared?: unknown
-    ): Promise<string>;
+    ): Promise<string | null>;
     cancelAuthorization?(prepared?: unknown): void;
 }
 export interface AuthorizationRequest {

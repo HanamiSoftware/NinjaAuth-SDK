@@ -197,6 +197,13 @@ export class NinjaAuth {
                     authorizationUrl,
                     prepared
                 );
+
+                if (responseUrl === null) {
+                    // Same-tab navigation unloads this document. The new app
+                    // document must initialize the SDK and call getSession().
+                    return new Promise<NinjaUser>(() => {});
+                }
+
                 const callbackUrl = new URL(responseUrl);
 
                 if (callbackUrl.searchParams.get("state") !== state) {
@@ -403,6 +410,13 @@ export class NinjaAuth {
                     authorizationUrl.toString(),
                     preparedAuthorization
                 );
+
+            if (responseUrl === null) {
+                throw NinjaAuthErrorException(
+                    "AUTHORIZATION_FAILED",
+                    "NinjaAuth: il flusso di autorizzazione di questa piattaforma non supporta la navigazione nella scheda corrente."
+                );
+            }
 
             const callback =
                 parseAuthorizationCallback(responseUrl);

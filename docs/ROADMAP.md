@@ -1,8 +1,8 @@
 # NinjaAuth — Roadmap and implementation status
 
-**Last reviewed:** 12 November 2026  
+**Last reviewed:** 13 November 2026  
 **Repository:** `HanamiSoftware/NinjaAuth-SDK`  
-**Branch for this documentation revision:** `dev`  
+**Branch for this documentation revision:** `feature/auth-mobile-redirect-flow`  
 **Package/source version recorded in repository:** `0.1.0`  
 **Release status:** not declared release-ready
 
@@ -10,9 +10,9 @@
 
 ## 1. Executive status
 
-The SDK source on the reviewed development line contains both:
+The SDK source on the reviewed development line contains:
 - Chrome Extension Authorization Code + PKCE login;
-- Web popup Authorization Code + PKCE login using a backend callback and an application-owned session.
+- Web desktop popup and mobile same-tab Authorization Code + PKCE launch, using the existing broker flow, backend callback and application-owned session.
 
 The Web flow is **implemented in the SDK source**. This does not mean that every live browser/provider/cookie scenario has been verified. Automated SDK tests use mocks at external boundaries; real-browser and environment integration checks remain a separate release requirement.
 
@@ -33,7 +33,7 @@ The constructor enforces a singleton within one JavaScript runtime. `init()` is 
 |---|---|---|
 | Configuration | Required client ID and redirect URI; platform defaults to Web; environment defaults to production | Unit tests cover validation; verify exact consumer configuration separately |
 | Chrome Extension login | Authorization Code + PKCE, transaction storage, callback-state validation and exchange | Chrome/Worker E2E must be tied to exact commits |
-| Web login | Popup, server-side state registration, callback outcome/state validation and application session lookup | Mocked SDK coverage does not prove live popup, cookie or CORS behavior |
+| Web login | Desktop popup or mobile same-tab navigation, server-side state registration, callback outcome/state validation and application session lookup | Mocked SDK coverage does not prove live popup, mobile navigation, cookie or CORS behavior |
 | Session lookup | `getSession()` observes current session and does not initiate login | Explicit `401 INVALID_SESSION` is unauthenticated; operational failures remain errors |
 | Logout | Uses platform-appropriate endpoint and requires explicit `loggedOut === true` confirmation | Verify revocation, cookie clearing and login-again in browser |
 | Web bridge | `completeWebAuthCallback()` forwards only state and outcome | Verify exact origin and opener behavior in browser |
@@ -72,7 +72,8 @@ Mocks, typecheck and build are not substitutes for live integration testing.
 ### P0 — Evidence and security hardening
 
 - [ ] Run the complete SDK CI suite on the exact current development commit and record evidence.
-- [ ] Complete the real-browser Web integration matrix in [TEST-PLAN.md](TEST-PLAN.md).
+- [ ] Complete the real-browser Web integration matrix in [TEST-PLAN.md](TEST-PLAN.md), including iOS and Android same-tab login/session restoration.
+- [ ] Reconcile the central AuthGear callback URI across Ninja Connect broker configuration and the NinjaURL callback Worker before live end-to-end testing.
 - [ ] Complete the Extension ↔ Worker integration matrix on identified commits.
 - [ ] Review OAuth transaction cleanup and error preservation on all cancellation/failure paths.
 - [ ] Review verifier, tokens, session secrets and logging boundaries before release.
