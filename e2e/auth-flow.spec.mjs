@@ -261,7 +261,12 @@ test("desktop browser completes the popup bridge and reads the HttpOnly app sess
     await page.getByRole("button", { name: "Sign in" }).click();
     const popup = await popupPromise;
 
-    await expect.poll(() => page.evaluate(() => window.__loginStatus)).toBe("resolved");
+    await expect.poll(() => page.evaluate(() => window.__loginStatus)).not.toBe("pending");
+    const loginOutcome = await page.evaluate(() => ({
+        status: window.__loginStatus,
+        error: window.__loginError
+    }));
+    expect(loginOutcome.status, `SDK login failed: ${loginOutcome.error ?? "unknown error"}`).toBe("resolved");
     await expect.poll(() => popup.isClosed()).toBe(true);
     expect(await page.evaluate(() => window.__loginUser.id)).toBe("e2e-user");
 
@@ -288,11 +293,16 @@ async function runMobileSameTab(browser, contextOptions, prepareContext) {
 
         await page.goto(APP_URL);
         await expect.poll(() => page.evaluate(() => window.__session?.authenticated)).toBe(false);
+        const returnedToApp = page.waitForEvent(
+            "framenavigated",
+            (frame) => frame === page.mainFrame() && frame.url() === APP_URL
+        );
         await page.getByRole("button", { name: "Sign in" }).click();
+        await returnedToApp;
 
         await expect.poll(() => flow.authorizationRequests.length).toBe(1);
-        await expect.poll(() => page.evaluate(() => window.__session?.authenticated)).toBe(true);
         await expect(page).toHaveURL(APP_URL);
+        await expect.poll(() => page.evaluate(() => window.__session?.authenticated)).toBe(true);
 
         expect(popupOpened).toBe(false);
         expect(await page.evaluate(() => window.__bridgeHadOpener)).toBe("false");
