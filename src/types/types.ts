@@ -36,12 +36,12 @@ export interface NinjaSessionInfo {
 /**
  * NinjaSession represents the current session state of the user.
  * @param {boolean} authenticated - Indicates whether the user is authenticated.
- * @param {NinjaUser | null} user - The authenticated user's information, or null if not authenticated.
+ * @param {NinjaUser | null} [user] - Present only in the legacy Extension session contract.
  * @param {NinjaSessionInfo | null} session - The session information, or null if not authenticated.
  */
 export interface NinjaSession {
     authenticated: boolean;
-    user: NinjaUser | null;
+    user?: NinjaUser | null;
     session: NinjaSessionInfo | null;
 }
 
