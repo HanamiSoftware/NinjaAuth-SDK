@@ -322,6 +322,56 @@ test("platform defaults to extension", async () => {
 
 // Session lookup contract
 
+test("Web getSession accepts the profile-free application session contract", async () => {
+    const { auth } = await initialize({
+        platform: "web",
+        redirectUri: "https://api.example.com/v1/auth/callback"
+    });
+
+    globalThis.fetch = async (url, options) => {
+        assert.equal(url, "https://api.example.com/v1/session");
+        assert.equal(options.method, "GET");
+        assert.equal(options.credentials, "include");
+        return response({
+            success: true,
+            data: {
+                authenticated: true,
+                session: {
+                    expiresAt: "2026-11-02T12:00:00.000Z",
+                    absoluteExpiresAt: "2026-11-09T12:00:00.000Z"
+                }
+            }
+        });
+    };
+
+    assert.deepEqual(await auth.getSession(), {
+        authenticated: true,
+        session: {
+            expiresAt: "2026-11-02T12:00:00.000Z",
+            absoluteExpiresAt: "2026-11-09T12:00:00.000Z"
+        }
+    });
+});
+
+test("Web getCurrentUser retrieves the profile from /v1/user/me", async () => {
+    const { auth } = await initialize({
+        platform: "web",
+        redirectUri: "https://api.example.com/v1/auth/callback"
+    });
+
+    globalThis.fetch = async (url, options) => {
+        assert.equal(url, "https://api.example.com/v1/user/me");
+        assert.equal(options.method, "GET");
+        assert.equal(options.credentials, "include");
+        return response({
+            success: true,
+            data: { user: USER }
+        });
+    };
+
+    assert.deepEqual(await auth.getCurrentUser(), USER);
+});
+
 test("getSession returns an authenticated session and includes cookies", async () => {
     const { auth } = await initialize();
 
@@ -919,7 +969,18 @@ test("web login opens a popup synchronously and completes through the backend ca
         if (url === "https://api.example.com/v1/session") {
             assert.equal(options.method, "GET");
             assert.equal(options.credentials, "include");
-            return response({ success: true, data: AUTHENTICATED_SESSION });
+            return response({
+                success: true,
+                data: {
+                    authenticated: true,
+                    session: AUTHENTICATED_SESSION.session
+                }
+            });
+        }
+        if (url === "https://api.example.com/v1/user/me") {
+            assert.equal(options.method, "GET");
+            assert.equal(options.credentials, "include");
+            return response({ success: true, data: { user: USER } });
         }
         assert.fail("Unexpected SDK request: " + url);
     };
@@ -929,7 +990,8 @@ test("web login opens a popup synchronously and completes through the backend ca
     assert.deepEqual(await loginPromise, USER);
     assert.deepEqual(requests.map((item) => item.url), [
         "http://127.0.0.1:8787/v1/state",
-        "https://api.example.com/v1/session"
+        "https://api.example.com/v1/session",
+        "https://api.example.com/v1/user/me"
     ]);
     const launchedUrl = new URL(browser.authorizationUrl);
     assert.equal(launchedUrl.origin, "https://auth.ninjaconnect.io");
@@ -962,7 +1024,16 @@ test("web login resolves its client ID from the exact registered callback when o
             });
         }
         if (url === "https://api.example.com/v1/session") {
-            return response({ success: true, data: AUTHENTICATED_SESSION });
+            return response({
+                success: true,
+                data: {
+                    authenticated: true,
+                    session: AUTHENTICATED_SESSION.session
+                }
+            });
+        }
+        if (url === "https://api.example.com/v1/user/me") {
+            return response({ success: true, data: { user: USER } });
         }
         assert.fail("Unexpected SDK request: " + url);
     };
