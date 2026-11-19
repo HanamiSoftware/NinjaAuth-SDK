@@ -70,20 +70,29 @@ function isNinjaSessionInfo(
 }
 
 function isNinjaSession(
-    value: unknown
+    value: unknown,
+    platform: "extension" | "web"
 ): value is NinjaSession {
     if (!isRecord(value) || typeof value.authenticated !== "boolean") {
         return false;
     }
 
     if (value.authenticated) {
-        return (
-            isNinjaUser(value.user) &&
-            isNinjaSessionInfo(value.session)
-        );
+        if (!isNinjaSessionInfo(value.session)) {
+            return false;
+        }
+
+        // The legacy Extension session contract still includes its user.
+        // Web sessions intentionally contain only authentication and expiry.
+        if (platform === "extension") {
+            return isNinjaUser(value.user);
+        }
+
+        return value.user === undefined || value.user === null || isNinjaUser(value.user);
     }
 
-    return value.user === null && value.session === null;
+    return value.session === null &&
+        (platform === "web" || value.user === null);
 }
 
 /**
@@ -224,14 +233,14 @@ export class NinjaAuth {
                 }
 
                 const session = await this.getSession();
-                if (!session.authenticated || !session.user) {
+                if (!session.authenticated) {
                     throw NinjaAuthErrorException(
                         "SESSION_NOT_ESTABLISHED",
                         "Il backend non ha confermato una sessione NinjaURL attiva."
                     );
                 }
 
-                return session.user;
+                return await this.getCurrentUser();
             } catch (error) {
                 authorize.cancelAuthorization(prepared);
                 throw error;
@@ -251,7 +260,7 @@ export class NinjaAuth {
     }
 
 
-    private getApplicationEndpoint(path: "session" | "logout"): string {
+    private getApplicationEndpoint(path: "session" | "logout" | "user/me"): string {
         if (!this.config?.redirectUri) {
             throw NinjaAuthErrorException(
                 "CONFIGURATION",
@@ -557,6 +566,85 @@ export class NinjaAuth {
 		 * reurns {Promise<void>} A promise that resolves when the logout process is complete.
 		 */
 
+    /**
+     * Retrieves the application user profile independently from session state.
+     * Web applications read the profile from their own /v1/user/me endpoint.
+     * The Extension keeps its legacy broker session profile contract.
+     */
+    public async getCurrentUser(): Promise<NinjaUser> {
+        if (!this.ensureInitialized()) {
+            throw NinjaAuthErrorException(
+                "INITIALIZATION_FAILED",
+                "NinjaAuth: call init() before getCurrentUser()."
+            );
+        }
+
+        if (this.config!.platform !== "web") {
+            const session = await this.getSession();
+            if (!session.authenticated || !session.user) {
+                throw NinjaAuthErrorException(
+                    "USER_NOT_AVAILABLE",
+                    "NinjaAuth: no authenticated user profile is available."
+                );
+            }
+            return session.user;
+        }
+
+        let response: Response;
+        try {
+            response = await fetch(
+                this.getApplicationEndpoint("user/me"),
+                {
+                    method: "GET",
+                    credentials: "include"
+                }
+            );
+        } catch (error) {
+            throw NinjaAuthErrorException(
+                "NETWORK",
+                "NinjaAuth: unable to retrieve the current user profile.",
+                error
+            );
+        }
+
+        let result: unknown;
+        try {
+            result = await response.json();
+        } catch (error) {
+            throw NinjaAuthErrorException(
+                "INVALID_RESPONSE",
+                "NinjaAuth: the user profile service returned an invalid response.",
+                error
+            );
+        }
+
+        if (!isRecord(result)) {
+            throw NinjaAuthErrorException(
+                "INVALID_RESPONSE",
+                "NinjaAuth: the user profile service returned an invalid response envelope.",
+                result
+            );
+        }
+
+        if (!response.ok || result.success !== true) {
+            throw NinjaAuthErrorException(
+                "USER_PROFILE_FAILED",
+                "NinjaAuth: failed to retrieve the current user profile.",
+                result
+            );
+        }
+
+        if (!isRecord(result.data) || !isNinjaUser(result.data.user)) {
+            throw NinjaAuthErrorException(
+                "INVALID_RESPONSE",
+                "NinjaAuth: the user profile service returned an invalid profile payload.",
+                result.data
+            );
+        }
+
+        return result.data.user;
+    }
+
     public async logout(): Promise<void> {
 
         if (!this.ensureInitialized()) {
@@ -692,11 +780,9 @@ export class NinjaAuth {
         isRecord(result.error) &&
         result.error.code === "INVALID_SESSION"
     ) {
-        return {
-            authenticated: false,
-            user: null,
-            session: null
-        };
+        return this.config!.platform === "web"
+            ? { authenticated: false, session: null }
+            : { authenticated: false, user: null, session: null };
     }
 
     if (!response.ok || result.success !== true) {
@@ -708,7 +794,7 @@ export class NinjaAuth {
     }
 
 
-    if (!isNinjaSession(result.data)) {
+    if (!isNinjaSession(result.data, this.config!.platform ?? "extension")) {
         throw NinjaAuthErrorException(
             "INVALID_RESPONSE",
             "NinjaAuth: the session service returned an invalid session payload.",
