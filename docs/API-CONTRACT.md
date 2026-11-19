@@ -23,7 +23,8 @@ await auth.logout();
 - `NinjaAuth` is a runtime-local singleton with a public constructor.
 - `init()` is an instance method and can be called once.
 - `login()` returns `Promise<NinjaUser>`.
-- `getSession()` observes the current session; it never starts interactive login.
+- `getSession()` observes the current session; it never starts interactive login. On Web it returns only `authenticated` and `session`; the legacy Extension response continues to include `user`.
+- `getCurrentUser()` retrieves the application profile. On Web it calls the consuming application's `GET /v1/user/me`; on Extension it preserves the existing broker-backed profile behavior.
 - `logout()` resolves only after the server confirms `data.loggedOut === true`.
 - The singleton is not shared across separate tabs, workers, or extension contexts.
 
