@@ -22,6 +22,7 @@ auth.init({
 
 const user = await auth.login();
 const session = await auth.getSession();
+const currentUser = await auth.getCurrentUser();
 await auth.logout();
 ```
 
@@ -39,6 +40,7 @@ The singleton is scoped to one JavaScript runtime. Separate pages, workers, or e
 - Server-to-server authorization-code exchange with Ninja Connect for the Web flow; the Chrome Extension flow retains its existing exchange contract.
 - Environment-aware endpoints; production is the default.
 - Current-session lookup through `getSession()`; it does not start interactive login.
+- Application profile lookup through `getCurrentUser()`; Web reads the profile from its own `/v1/user/me` endpoint.
 - Current-session logout through `logout()`.
 - Typed SDK errors and OAuth transaction cleanup.
 
@@ -73,7 +75,7 @@ loginButton.addEventListener("click", async () => {
 
 The consuming application's backend completes the server-to-server exchange, resolves the application profile, creates its own application session, and sets its own HttpOnly cookie. It redirects the popup to a minimal same-origin bridge page. The bridge sends only `state` and the success/error outcome through `postMessage`; it must never forward the code, verifier, access token, refresh token, or session cookie.
 
-After the bridge response, NinjaAuth verifies state and reads the consuming application's session through the API origin derived from `redirectUri`. For the Web platform, `getSession()` and `logout()` use the application's own session endpoints. The Chrome Extension platform retains its existing broker session endpoints.
+After the bridge response, NinjaAuth verifies state and reads the consuming application's session through the API origin derived from `redirectUri`. For the Web platform, `getSession()` reads only authentication state and session expiry; `getCurrentUser()` reads the application profile from `/v1/user/me`. `logout()` uses the application's own session endpoint. The Chrome Extension platform retains its existing broker session endpoints and legacy session profile.
 
 A same-origin bridge page can use the exported helper:
 
